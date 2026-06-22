@@ -1,0 +1,45 @@
+{
+  "name": "medvault",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.3",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-navigation/bottom-tabs": "^7.18.2",
+    "@react-navigation/native": "^7.3.3",
+    "@react-navigation/native-stack": "^7.17.5",
+    "expo": "~54.0.0",
+    "expo-asset": "~12.0.13",
+    "expo-av": "~16.0.8",
+    "expo-crypto": "~15.0.9",
+    "expo-document-picker": "~14.0.8",
+    "expo-file-system": "~19.0.23",
+    "expo-image-picker": "~17.0.11",
+    "expo-media-library": "~18.2.1",
+    "expo-print": "~15.0.8",
+    "expo-sharing": "~14.0.8",
+    "expo-status-bar": "~3.0.9",
+    "expo-video": "~3.0.16",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-blob-util": "^0.24.10",
+    "react-native-date-picker": "^5.0.13",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-modal": "^14.0.0-rc.1",
+    "react-native-pdf": "^7.0.4",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-vector-icons": "^10.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "^5.3.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
