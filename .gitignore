@@ -39,3 +39,14 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Backend — never commit these
+medvault-backend/venv/
+medvault-backend/__pycache__/
+medvault-backend/routes/__pycache__/
+medvault-backend/utils/__pycache__/
+medvault-backend/*.db
+medvault-backend/uploads/
+medvault-backend/.env
+MedVault_Production_HLD.pptx
+business_idea.md
