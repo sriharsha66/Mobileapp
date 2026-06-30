@@ -76,6 +76,10 @@ export default function UploadScreen({ navigation }: Props) {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [allowLeave, setAllowLeave] = useState(false);
   const checkmarkScale = useRef(new Animated.Value(0)).current;
+  const [toastMsg, setToastMsg] = useState('');
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pincodeInput, setPincodeInput] = useState('');
   const [pincodeHint, setPincodeHint] = useState('');
   const [pincodeLoading, setPincodeLoading] = useState(false);
@@ -90,6 +94,18 @@ export default function UploadScreen({ navigation }: Props) {
   const doctorRef = useRef<TextInput>(null);
   const patientRef = useRef<TextInput>(null);
   const notesRef = useRef<TextInput>(null);
+
+  function showUploadToast(msg: string) {
+    hapticSuccess();
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToastMsg(msg);
+    setToastVisible(true);
+    toastAnim.setValue(0);
+    Animated.spring(toastAnim, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }).start();
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => setToastVisible(false));
+    }, 2200);
+  }
 
   useEffect(() => {
     async function loadHistory() {
@@ -204,6 +220,8 @@ export default function UploadScreen({ navigation }: Props) {
       const serverUri = await copyFileToStorage(user!.id, uri, name, mimeType);
       const serverId  = fileIdFromUri(serverUri);
       setFiles(prev => [...prev, { id: serverId, name, uri: serverUri, type, mimeType, size, createdAt: new Date().toISOString() }]);
+      const label = type === 'image' ? 'Image uploaded successfully' : type === 'video' ? 'Video uploaded successfully' : 'Document uploaded successfully';
+      showUploadToast(label);
     } catch (e: any) {
       console.error('Upload error:', e);
       Alert.alert('Upload failed', e?.message || 'Could not upload file. Please try again.');
@@ -531,16 +549,50 @@ export default function UploadScreen({ navigation }: Props) {
             <FileBtn icon="images" label="Gallery" onPress={pickFromGallery} />
             <FileBtn icon="document" label="Document" onPress={pickDocument} />
           </View>
-          {files.length > 0 && (
-            <View style={styles.fileList}>
-              {files.map(f => (
-                <View key={f.id} style={styles.fileItem}>
-                  {f.type === 'image'
-                    ? <Image source={{ uri: f.uri }} style={styles.fileThumb} />
-                    : <View style={styles.fileIconBox}><Text style={styles.fileIconEmoji}>{fileEmoji(f.type)}</Text></View>}
-                  <Text style={styles.fileName} numberOfLines={2}>{f.name}</Text>
-                  <TouchableOpacity onPress={() => removeFile(f.id)} style={styles.removeBtn}>
-                    <Ionicons name="close-circle" size={22} color="#EF5350" />
+
+          {/* Images — horizontal scroll */}
+          {files.filter(f => f.type === 'image').length > 0 && (
+            <View style={{ marginBottom: 10 }}>
+              <Text style={styles.fileGroupLabel}>
+                Images ({files.filter(f => f.type === 'image').length})
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScroll}>
+                {files.filter(f => f.type === 'image').map(f => (
+                  <View key={f.id} style={styles.imageCard}>
+                    <Image source={{ uri: f.uri }} style={styles.imageCardThumb} />
+                    <View style={styles.imageCardCheckBadge}>
+                      <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
+                    </View>
+                    <TouchableOpacity onPress={() => removeFile(f.id)} style={styles.imageCardDelete}>
+                      <Ionicons name="trash-outline" size={16} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.imageCardName} numberOfLines={1}>{f.name}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Documents — vertical list */}
+          {files.filter(f => f.type !== 'image').length > 0 && (
+            <View style={styles.docList}>
+              <Text style={styles.fileGroupLabel}>
+                Documents ({files.filter(f => f.type !== 'image').length})
+              </Text>
+              {files.filter(f => f.type !== 'image').map(f => (
+                <View key={f.id} style={styles.docItem}>
+                  <View style={styles.docIconBox}>
+                    <Text style={styles.docIconEmoji}>{fileEmoji(f.type)}</Text>
+                    <View style={styles.docCheckBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+                    </View>
+                  </View>
+                  <View style={styles.docInfo}>
+                    <Text style={styles.docName} numberOfLines={2}>{f.name}</Text>
+                    <Text style={styles.docMeta}>{f.type.toUpperCase()} · {formatSize(f.size)}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeFile(f.id)} style={styles.docDeleteBtn}>
+                    <Ionicons name="trash-outline" size={20} color="#EF5350" />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -555,6 +607,20 @@ export default function UploadScreen({ navigation }: Props) {
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Report</Text>}
         </TouchableOpacity>
       </View>
+
+      {/* Upload success toast */}
+      {toastVisible && (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.uploadToast, {
+            opacity: toastAnim,
+            transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+          }]}
+        >
+          <Ionicons name="checkmark-circle" size={20} color="#fff" />
+          <Text style={styles.uploadToastText}>{toastMsg}</Text>
+        </Animated.View>
+      )}
 
       {/* Save progress / success overlay */}
       {(saving || saveSuccess) && (
@@ -606,6 +672,13 @@ function fileEmoji(type: MedFile['type']): string {
     case 'dicom': return '🩻';
     default: return '📎';
   }
+}
+
+function formatSize(bytes: number): string {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 const makeStyles = (t: AppTheme) => StyleSheet.create({
@@ -710,13 +783,44 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
   fileActions: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   fileBtn: { flex: 1, backgroundColor: t.surface, borderRadius: 12, borderWidth: 1.5, borderColor: t.border, borderStyle: 'dashed', alignItems: 'center', paddingVertical: 14, gap: 4 },
   fileBtnText: { fontSize: 12, color: '#1565C0', fontWeight: '600' },
-  fileList: { gap: 8 },
-  fileItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.surface, borderRadius: 10, padding: 10, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
-  fileThumb: { width: 44, height: 44, borderRadius: 6, marginRight: 10 },
-  fileIconBox: { width: 44, height: 44, borderRadius: 6, backgroundColor: t.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  fileIconEmoji: { fontSize: 22 },
-  fileName: { flex: 1, fontSize: 13, color: t.text },
-  removeBtn: { padding: 4 },
+  fileGroupLabel: { fontSize: 11, fontWeight: '700', color: t.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  // Image horizontal scroll
+  imageScroll: { marginHorizontal: -4 },
+  imageCard: { width: 100, marginHorizontal: 4, marginBottom: 4, position: 'relative' as const },
+  imageCardThumb: { width: 100, height: 100, borderRadius: 10, backgroundColor: t.inputBg },
+  imageCardCheckBadge: { position: 'absolute' as const, top: 5, left: 5, backgroundColor: '#fff', borderRadius: 10 },
+  imageCardDelete: { position: 'absolute' as const, top: 5, right: 5, backgroundColor: 'rgba(239,83,80,0.85)', borderRadius: 8, padding: 4 },
+  imageCardName: { fontSize: 10, color: t.textMuted, marginTop: 4, textAlign: 'center' as const },
+  // Document list
+  docList: { gap: 8 },
+  docItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.surface, borderRadius: 12, padding: 10, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+  docIconBox: { width: 44, height: 44, borderRadius: 8, backgroundColor: t.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 10, position: 'relative' as const },
+  docIconEmoji: { fontSize: 22 },
+  docCheckBadge: { position: 'absolute' as const, bottom: -2, right: -2, backgroundColor: '#fff', borderRadius: 8 },
+  docInfo: { flex: 1 },
+  docName: { fontSize: 13, fontWeight: '600', color: t.text },
+  docMeta: { fontSize: 11, color: t.textMuted, marginTop: 2 },
+  docDeleteBtn: { padding: 6 },
+  // Upload toast
+  uploadToast: {
+    position: 'absolute' as const,
+    bottom: 88,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#2E7D32',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 28,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    zIndex: 100,
+  },
+  uploadToastText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   stickyFooter: {
     backgroundColor: t.surface, paddingHorizontal: 16, paddingVertical: 12,
     paddingBottom: Platform.OS === 'ios' ? 28 : 12,

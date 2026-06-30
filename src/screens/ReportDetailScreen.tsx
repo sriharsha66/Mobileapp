@@ -167,17 +167,51 @@ export default function ReportDetailScreen({ navigation, route }: Props) {
 ${pages.join('\n')}`;
       }
 
-      // List of non-image files
+      // Documents — embed PDFs as base64, list others in table
       let filesHtml = '';
       if (otherFiles.length > 0) {
-        const rows = otherFiles.map(f => {
-          const emoji = f.type === 'pdf' ? '📄' : f.type === 'video' ? '🎥' : '🩻';
-          const size = f.size < 1024 ? `${f.size} B` : f.size < 1048576 ? `${(f.size/1024).toFixed(1)} KB` : `${(f.size/1048576).toFixed(1)} MB`;
-          return `<tr><td class="f-icon">${emoji}</td><td class="f-name">${f.name}</td><td class="f-meta">${f.type.toUpperCase()}</td><td class="f-meta">${size}</td></tr>`;
-        }).join('');
-        filesHtml = `
-<div class="sec-hdr">Other Attachments &nbsp;<span class="sec-count">${otherFiles.length}</span></div>
+        const pdfFiles = otherFiles.filter(f => f.type === 'pdf');
+        const nonPdfFiles = otherFiles.filter(f => f.type !== 'pdf');
+
+        let pdfHtml = '';
+        if (pdfFiles.length > 0) {
+          const blocks = await Promise.all(pdfFiles.map(async (f) => {
+            const size = f.size < 1024 ? `${f.size} B` : f.size < 1048576 ? `${(f.size/1024).toFixed(1)} KB` : `${(f.size/1048576).toFixed(1)} MB`;
+            try {
+              const tempPath = (LegacyFS.cacheDirectory ?? '') + `mv_pdf_${f.id}.pdf`;
+              const info = await LegacyFS.getInfoAsync(tempPath);
+              if (!info.exists) await LegacyFS.downloadAsync(f.uri, tempPath);
+              const b64 = await LegacyFS.readAsStringAsync(tempPath, { encoding: LegacyFS.EncodingType.Base64 });
+              return `
+<div class="pdf-block">
+  <div class="pdf-block-hdr"><span>📄 ${f.name}</span><span class="pdf-block-meta">${size}</span></div>
+  <object data="data:application/pdf;base64,${b64}" type="application/pdf" width="100%" height="1050px" style="border:none;display:block;"></object>
+</div>`;
+            } catch {
+              return `
+<div class="pdf-block">
+  <div class="pdf-block-hdr"><span>📄 ${f.name}</span><span class="pdf-block-meta">${size} · unavailable</span></div>
+</div>`;
+            }
+          }));
+          pdfHtml = `
+<div class="sec-hdr">Attached Documents &nbsp;<span class="sec-count">${pdfFiles.length}</span></div>
+${blocks.join('\n')}`;
+        }
+
+        let tableHtml = '';
+        if (nonPdfFiles.length > 0) {
+          const rows = nonPdfFiles.map(f => {
+            const emoji = f.type === 'video' ? '🎥' : '🩻';
+            const size = f.size < 1024 ? `${f.size} B` : f.size < 1048576 ? `${(f.size/1024).toFixed(1)} KB` : `${(f.size/1048576).toFixed(1)} MB`;
+            return `<tr><td class="f-icon">${emoji}</td><td class="f-name">${f.name}</td><td class="f-meta">${f.type.toUpperCase()}</td><td class="f-meta">${size}</td></tr>`;
+          }).join('');
+          tableHtml = `
+<div class="sec-hdr">Other Attachments &nbsp;<span class="sec-count">${nonPdfFiles.length}</span></div>
 <table class="files-tbl"><tbody>${rows}</tbody></table>`;
+        }
+
+        filesHtml = pdfHtml + tableHtml;
       }
 
       const uploadedOn = new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -234,6 +268,11 @@ ${pages.join('\n')}`;
   .f-icon{ width:28px; font-size:16px; }
   .f-name{ color:#222; font-weight:500; }
   .f-meta{ color:#999; width:80px; text-align:right; }
+
+  /* ── Embedded PDF blocks ── */
+  .pdf-block{ page-break-before:always; break-before:page; margin-bottom:10px; }
+  .pdf-block-hdr{ display:flex; justify-content:space-between; align-items:center; background:#F5F7FA; border-radius:6px; padding:8px 12px; font-size:13px; font-weight:700; color:#333; margin-bottom:6px; }
+  .pdf-block-meta{ font-size:11px; color:#999; font-weight:400; }
 
   /* ── Footer ── */
   .footer{ text-align:center; color:#BDBDBD; font-size:10px; margin-top:28px; padding-top:10px; border-top:1px solid #E8E8E8; page-break-inside:avoid; }
