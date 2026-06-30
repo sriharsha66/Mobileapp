@@ -1,16 +1,26 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useEffect, useRef, useState } from 'react';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 import { useAuth } from '../context/AuthContext';
+import { useBiometric } from '../context/BiometricContext';
 import { AuthStackParamList, MainStackParamList, TabParamList } from './types';
+import { navigationRef, consumePendingReportNav } from './navigationRef';
+import { User } from '../types';
+import { hapticTab } from '../utils/haptics';
+import AppLockScreen from '../screens/AppLockScreen';
 
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import OTPScreen from '../screens/OTPScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ResetPasswordScreen from '../screens/ResetPasswordScreen';
+import SplashAnimationScreen from '../screens/SplashAnimationScreen';
+import WelcomeScreen from '../screens/WelcomeScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import HomeScreen from '../screens/HomeScreen';
 import UploadScreen from '../screens/UploadScreen';
@@ -28,6 +38,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 function AddTabPlaceholder() { return null; }
 
 function MainTabs() {
+  const { theme } = useTheme();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -36,18 +47,19 @@ function MainTabs() {
           height: 72,
           paddingBottom: 10,
           paddingTop: 4,
-          backgroundColor: '#fff',
-          borderTopColor: '#E0E0E0',
+          backgroundColor: theme.tabBg,
+          borderTopColor: theme.tabBorder,
           borderTopWidth: 1,
         },
         tabBarActiveTintColor: '#1565C0',
-        tabBarInactiveTintColor: '#9E9E9E',
+        tabBarInactiveTintColor: theme.textMuted,
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
       }}
     >
       <Tab.Screen
         name="HomeTab"
         component={DashboardScreen}
+        listeners={{ tabPress: () => hapticTab() }}
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, focused }) => (
@@ -55,10 +67,10 @@ function MainTabs() {
           ),
         }}
       />
-
       <Tab.Screen
         name="MyReportsTab"
         component={HomeScreen}
+        listeners={{ tabPress: () => hapticTab() }}
         options={{
           tabBarLabel: 'My Reports',
           tabBarIcon: ({ color, focused }) => (
@@ -66,13 +78,13 @@ function MainTabs() {
           ),
         }}
       />
-
       <Tab.Screen
         name="AddTab"
         component={AddTabPlaceholder}
         listeners={({ navigation: tabNav }) => ({
           tabPress: (e) => {
             e.preventDefault();
+            hapticTab();
             tabNav.getParent()?.navigate('Upload', {});
           },
         })}
@@ -83,18 +95,16 @@ function MainTabs() {
               activeOpacity={0.85}
               style={[props.style, tabStyles.addTabItem]}
             >
-              <View style={tabStyles.fabCircle}>
-                <Ionicons name="add" size={26} color="#fff" />
-              </View>
+              <Ionicons name="add-circle-outline" size={24} color="#9E9E9E" />
               <Text style={tabStyles.addLabel}>Add</Text>
             </TouchableOpacity>
           ),
         }}
       />
-
       <Tab.Screen
         name="ProfileTab"
         component={ProfileScreen}
+        listeners={{ tabPress: () => hapticTab() }}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, focused }) => (
@@ -114,6 +124,7 @@ function MainNavigator() {
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '700', fontSize: 17 },
       }}
+      screenListeners={{ beforeRemove: () => hapticTab() }}
     >
       <MainStack.Screen name="Tabs" component={MainTabs} options={{ headerShown: false }} />
       <MainStack.Screen name="Upload" component={UploadScreen} options={{ title: 'Add New Report', headerBackButtonMenuEnabled: false, headerBackTitle: 'Back' }} />
@@ -124,23 +135,18 @@ function MainNavigator() {
         component={FileViewerScreen}
         options={({ route }) => ({ title: route.params.fileName })}
       />
-      <MainStack.Screen
-        name="SavedQuotes"
-        component={SavedQuotesScreen}
-        options={{ title: 'Saved Quotes' }}
-      />
-      <MainStack.Screen
-        name="StarredReports"
-        component={StarredReportsScreen}
-        options={{ title: 'Starred Reports' }}
-      />
+      <MainStack.Screen name="SavedQuotes" component={SavedQuotesScreen} options={{ title: 'Saved Quotes' }} />
+      <MainStack.Screen name="StarredReports" component={StarredReportsScreen} options={{ title: 'Starred Reports' }} />
     </MainStack.Navigator>
   );
 }
 
 function AuthNavigator() {
   return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+    <AuthStack.Navigator
+      screenOptions={{ headerShown: false }}
+      screenListeners={{ beforeRemove: () => hapticTab() }}
+    >
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Signup" component={SignupScreen} />
       <AuthStack.Screen
@@ -154,12 +160,68 @@ function AuthNavigator() {
           headerBackTitle: '',
         }}
       />
+      <AuthStack.Screen
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: '#1565C0' },
+          headerTintColor: '#fff',
+          headerTitle: 'Forgot Password',
+          headerBackTitle: 'Back',
+        }}
+      />
+      <AuthStack.Screen
+        name="ResetPassword"
+        component={ResetPasswordScreen}
+        options={{
+          headerShown: true,
+          headerStyle: { backgroundColor: '#1565C0' },
+          headerTintColor: '#fff',
+          headerTitle: 'Reset Password',
+          headerBackTitle: 'Back',
+        }}
+      />
     </AuthStack.Navigator>
   );
 }
 
+type AppScreen = 'auth' | 'splash' | 'welcome' | 'main';
+
 export default function AppNavigator() {
   const { user, isLoading } = useAuth();
+  const { theme, loadThemeForUser } = useTheme();
+  const { isLocked } = useBiometric();
+  const [screen, setScreen] = useState<AppScreen>('auth');
+  const prevUserRef = useRef<User | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (isLoading) {
+      prevUserRef.current = undefined;
+      return;
+    }
+
+    if (prevUserRef.current === undefined) {
+      // Session restore — go straight to main (no splash); load theme now
+      prevUserRef.current = user;
+      if (user) {
+        loadThemeForUser(user.id);
+        setScreen('main');
+      } else {
+        setScreen('auth');
+      }
+      return;
+    }
+
+    if (prevUserRef.current === null && user !== null) {
+      // Fresh login — show splash then welcome; theme loads when reaching main
+      setScreen('splash');
+    } else if (user === null) {
+      loadThemeForUser(null);
+      setScreen('auth');
+    }
+    prevUserRef.current = user;
+  }, [user, isLoading]);
 
   if (isLoading) {
     return (
@@ -170,35 +232,50 @@ export default function AppNavigator() {
     );
   }
 
+  const navTheme = {
+    ...DefaultTheme,
+    colors: { ...DefaultTheme.colors, background: theme.bg, card: theme.tabBg, border: theme.tabBorder, text: theme.text },
+  };
+
+  if (screen === 'splash') {
+    return (
+      // Always go to welcome after splash (every login)
+      <SplashAnimationScreen onDone={() => setScreen('welcome')} />
+    );
+  }
+
+  if (screen === 'welcome') {
+    return (
+      <WelcomeScreen
+        onDone={() => {
+          if (user) loadThemeForUser(user.id);
+          setScreen('main');
+        }}
+        isFirstLogin={!user?.avatar}
+      />
+    );
+  }
+
   return (
-    <NavigationContainer>
-      {user ? <MainNavigator /> : <AuthNavigator />}
-    </NavigationContainer>
+    <>
+      <NavigationContainer
+        theme={navTheme}
+        ref={navigationRef}
+        onReady={() => {
+          const reportId = consumePendingReportNav();
+          if (reportId && user) {
+            (navigationRef as any).navigate('ReportDetail', { reportId });
+          }
+        }}
+      >
+        {user ? <MainNavigator /> : <AuthNavigator />}
+      </NavigationContainer>
+      {/* AppLockScreen disabled — biometric lock feature temporarily hidden */}
+    </>
   );
 }
 
 const tabStyles = StyleSheet.create({
-  addTabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fabCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1565C0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 5,
-    shadowColor: '#1565C0',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    marginBottom: 2,
-  },
-  addLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#1565C0',
-  },
+  addTabItem: { alignItems: 'center', justifyContent: 'center' },
+  addLabel: { fontSize: 10, fontWeight: '600', color: '#9E9E9E', marginTop: 2 },
 });

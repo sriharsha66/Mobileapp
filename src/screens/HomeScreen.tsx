@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   TextInput, RefreshControl, StatusBar, Alert, ScrollView,
@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme, AppTheme } from '../context/ThemeContext';
 import { getReports, deleteReport } from '../services/storageService';
 import { MedReport, ReportType, REPORT_TYPE_LABELS, REPORT_TYPE_COLORS } from '../types';
 import { STARRED_KEY } from './StarredReportsScreen';
@@ -14,23 +15,56 @@ import { STARRED_KEY } from './StarredReportsScreen';
 type Props = { navigation: any };
 
 const TYPE_FILTERS: Array<{ key: ReportType | 'all'; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'blood_test', label: 'Blood' },
-  { key: 'ecg', label: 'ECG' },
+  { key: 'all', label: 'All Reports' },
+  { key: 'blood_test', label: 'Blood Test' },
+  { key: 'ecg', label: 'ECG / Heart' },
   { key: 'xray', label: 'X-Ray' },
   { key: 'mri', label: 'MRI' },
-  { key: 'prescription', label: 'Rx' },
-  { key: 'ct_scan', label: 'CT' },
+  { key: 'ct_scan', label: 'CT Scan' },
   { key: 'ultrasound', label: 'Ultrasound' },
+  { key: 'prescription', label: 'Prescription' },
+  { key: 'discharge_summary', label: 'Discharge Summary' },
+  { key: 'vaccination', label: 'Vaccination' },
   { key: 'other', label: 'Other' },
 ];
 
+const FILTER_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  all: 'apps-outline',
+  blood_test: 'water-outline',
+  ecg: 'pulse-outline',
+  xray: 'scan-outline',
+  mri: 'aperture-outline',
+  ct_scan: 'radio-outline',
+  ultrasound: 'wifi-outline',
+  prescription: 'medical-outline',
+  discharge_summary: 'document-text-outline',
+  vaccination: 'shield-checkmark-outline',
+  other: 'ellipsis-horizontal-circle-outline',
+};
+
+const FILTER_COLORS: Record<string, string> = {
+  all: '#1565C0',
+  blood_test: '#E53935',
+  ecg: '#D81B60',
+  xray: '#5E35B1',
+  mri: '#3949AB',
+  ct_scan: '#00897B',
+  ultrasound: '#039BE5',
+  prescription: '#43A047',
+  discharge_summary: '#FB8C00',
+  vaccination: '#8E24AA',
+  other: '#757575',
+};
+
 export default function HomeScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const { theme: t } = useTheme();
+  const flatListRef = useRef<FlatList<MedReport>>(null);
   const [reports, setReports] = useState<MedReport[]>([]);
   const [starredIds, setStarredIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<ReportType | 'all'>('all');
+  const [typeFilterOpen, setTypeFilterOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -47,6 +81,8 @@ export default function HomeScreen({ navigation }: Props) {
     load();
     setSearch('');
     setActiveFilter('all');
+    setTypeFilterOpen(false);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [load]));
 
   async function toggleStar(reportId: string) {
@@ -83,6 +119,7 @@ export default function HomeScreen({ navigation }: Props) {
     return matchesType && matchesSearch;
   });
 
+  const styles = makeStyles(t);
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1565C0" />
@@ -101,6 +138,7 @@ export default function HomeScreen({ navigation }: Props) {
       </View>
 
       <FlatList
+        ref={flatListRef}
         data={filtered}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
@@ -129,24 +167,71 @@ export default function HomeScreen({ navigation }: Props) {
               )}
             </View>
 
-            {/* Filter chips */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterRow}
+            {/* Filter dropdown — same inline grid as Add/Edit report type */}
+            <TouchableOpacity
+              style={[styles.filterTrigger, activeFilter !== 'all' && styles.filterTriggerActive]}
+              onPress={() => setTypeFilterOpen(p => !p)}
+              activeOpacity={0.75}
             >
-              {TYPE_FILTERS.map(item => (
-                <TouchableOpacity
-                  key={item.key}
-                  style={[styles.chip, activeFilter === item.key && styles.chipActive]}
-                  onPress={() => setActiveFilter(item.key)}
-                >
-                  <Text style={[styles.chipText, activeFilter === item.key && styles.chipTextActive]}>
-                    {item.label}
+              <View style={styles.filterTriggerRow}>
+                <View style={[styles.filterTriggerIconBox, { backgroundColor: FILTER_COLORS[activeFilter] + '22' }]}>
+                  <Ionicons name={FILTER_ICONS[activeFilter]} size={18} color={FILTER_COLORS[activeFilter]} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.filterTriggerLabel}>
+                    {TYPE_FILTERS.find(f => f.key === activeFilter)?.label ?? 'All Reports'}
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                  {activeFilter !== 'all' && (
+                    <Text style={styles.filterTriggerSub}>
+                      {filtered.length} report{filtered.length !== 1 ? 's' : ''} found
+                    </Text>
+                  )}
+                </View>
+                {activeFilter !== 'all' && (
+                  <TouchableOpacity
+                    onPress={() => { setActiveFilter('all'); setTypeFilterOpen(false); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={20} color={t.textMuted} />
+                  </TouchableOpacity>
+                )}
+                <Ionicons name={typeFilterOpen ? 'chevron-up' : 'chevron-down'} size={18} color={t.textMuted} style={{ marginLeft: 6 }} />
+              </View>
+            </TouchableOpacity>
+
+            {typeFilterOpen && (
+              <View style={styles.typeGrid}>
+                {TYPE_FILTERS.map(item => {
+                  const isSelected = activeFilter === item.key;
+                  const color = FILTER_COLORS[item.key];
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[styles.typeGridItem, isSelected && styles.typeGridItemSelected]}
+                      onPress={() => { setActiveFilter(item.key); setTypeFilterOpen(false); }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.typeGridIcon, { backgroundColor: isSelected ? color + '33' : color + '18' }]}>
+                        <Ionicons name={FILTER_ICONS[item.key]} size={20} color={color} />
+                      </View>
+                      <Text
+                        style={[styles.typeGridLabel, isSelected && { color: '#1565C0' }]}
+                        numberOfLines={2}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.75}
+                      >
+                        {item.label}
+                      </Text>
+                      {isSelected && (
+                        <View style={styles.typeGridCheck}>
+                          <Ionicons name="checkmark-circle" size={16} color="#1565C0" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
 
             {filtered.length === 0 && (
               <View style={styles.emptyState}>
@@ -181,6 +266,8 @@ function ReportCard({ report, starred, onPress, onDelete, onStar }: {
   report: MedReport; starred: boolean;
   onPress: () => void; onDelete: () => void; onStar: () => void;
 }) {
+  const { theme: t } = useTheme();
+  const styles = makeStyles(t);
   const color = REPORT_TYPE_COLORS[report.reportType] || '#1565C0';
   const label = report.reportType === 'other' && report.otherTypeName ? report.otherTypeName : REPORT_TYPE_LABELS[report.reportType];
   return (
@@ -225,8 +312,8 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
+const makeStyles = (t: AppTheme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: t.bg },
   header: {
     backgroundColor: '#1565C0',
     paddingTop: 52,
@@ -248,7 +335,7 @@ const styles = StyleSheet.create({
   searchRow: {
     marginTop: 14,
     marginBottom: 8,
-    backgroundColor: '#fff',
+    backgroundColor: t.surface,
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -260,14 +347,43 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: '#212121' },
-  filterRow: { paddingVertical: 4, paddingRight: 8 },
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#E3F2FD', marginRight: 8 },
-  chipActive: { backgroundColor: '#1565C0' },
-  chipText: { fontSize: 13, color: '#1565C0', fontWeight: '600' },
-  chipTextActive: { color: '#fff' },
+  searchInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: t.text },
+  filterTrigger: {
+    backgroundColor: t.surface, borderRadius: 12, borderWidth: 1.5,
+    borderColor: t.border, paddingVertical: 10, paddingHorizontal: 14,
+    marginTop: 6, marginBottom: 6,
+  },
+  filterTriggerActive: { borderColor: '#1565C0' },
+  filterTriggerRow: { flexDirection: 'row', alignItems: 'center' },
+  filterTriggerIconBox: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
+  filterTriggerLabel: { fontSize: 14, fontWeight: '700', color: t.text },
+  filterTriggerSub: { fontSize: 11, color: t.textMuted, marginTop: 1 },
+  typeGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8,
+    padding: 10, backgroundColor: t.surface,
+    borderRadius: 12, borderWidth: 1.5, borderColor: '#1565C0',
+  },
+  typeGridItem: {
+    width: '22%', flexGrow: 1, backgroundColor: t.inputBg,
+    borderRadius: 10, paddingVertical: 10, paddingHorizontal: 4,
+    alignItems: 'center', gap: 6, borderWidth: 1.5,
+    borderColor: 'transparent', position: 'relative' as const,
+  },
+  typeGridItemSelected: { backgroundColor: t.primaryLight, borderColor: '#1565C0' },
+  typeGridIcon: {
+    width: 38, height: 38, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  typeGridLabel: {
+    fontSize: 10, fontWeight: '600', color: t.text,
+    textAlign: 'center' as const, lineHeight: 13, letterSpacing: -0.1,
+  },
+  typeGridCheck: { position: 'absolute' as const, top: 4, right: 4 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: t.surface,
     borderRadius: 14,
     marginBottom: 12,
     flexDirection: 'row',
@@ -285,12 +401,12 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '700' },
   cardTopRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   starBtn: { padding: 2 },
-  cardDate: { fontSize: 12, color: '#9E9E9E' },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#212121', marginBottom: 4 },
-  cardMeta: { fontSize: 12, color: '#757575', marginTop: 2 },
+  cardDate: { fontSize: 12, color: t.textMuted },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: t.text, marginBottom: 4 },
+  cardMeta: { fontSize: 12, color: t.textSecondary, marginTop: 2 },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-  fileCount: { fontSize: 12, color: '#9E9E9E' },
+  fileCount: { fontSize: 12, color: t.textMuted },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#424242', marginTop: 12, marginBottom: 8 },
-  emptySub: { fontSize: 14, color: '#9E9E9E', textAlign: 'center', lineHeight: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: t.text, marginTop: 12, marginBottom: 8 },
+  emptySub: { fontSize: 14, color: t.textMuted, textAlign: 'center', lineHeight: 20 },
 });

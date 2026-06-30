@@ -5,26 +5,32 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { ALL_QUOTES, QUOTE_FAV_KEY } from '../constants/quotes';
+import { ALL_QUOTES, quoteFavKey } from '../constants/quotes';
+import { useAuth } from '../context/AuthContext';
+import { useTheme, AppTheme } from '../context/ThemeContext';
 
 export default function SavedQuotesScreen() {
+  const { user } = useAuth();
+  const { theme: t } = useTheme();
   const [favIds, setFavIds] = useState<string[]>([]);
 
   const loadFavs = useCallback(async () => {
-    const json = await AsyncStorage.getItem(QUOTE_FAV_KEY);
+    if (!user) return;
+    const json = await AsyncStorage.getItem(quoteFavKey(user.id));
     setFavIds(json ? JSON.parse(json) : []);
-  }, []);
+  }, [user]);
 
   useFocusEffect(useCallback(() => { loadFavs(); }, [loadFavs]));
 
   async function removeFavorite(id: string) {
+    if (!user) return;
     const updated = favIds.filter(f => f !== id);
     setFavIds(updated);
-    await AsyncStorage.setItem(QUOTE_FAV_KEY, JSON.stringify(updated));
+    await AsyncStorage.setItem(quoteFavKey(user.id), JSON.stringify(updated));
   }
 
   const savedQuotes = ALL_QUOTES.filter(q => favIds.includes(q.id));
-
+  const s = makeStyles(t);
   return (
     <View style={s.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1565C0" />
@@ -65,15 +71,15 @@ export default function SavedQuotesScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
+const makeStyles = (t: AppTheme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: t.bg },
   scroll: { padding: 16, paddingBottom: 40 },
   countLine: {
-    fontSize: 12, fontWeight: '700', color: '#9E9E9E',
+    fontSize: 12, fontWeight: '700', color: t.textMuted,
     textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 14,
   },
   card: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 18,
+    backgroundColor: t.surface, borderRadius: 16, padding: 18,
     borderLeftWidth: 4, marginBottom: 12,
     elevation: 2, shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.07, shadowRadius: 4,
@@ -86,6 +92,6 @@ const s = StyleSheet.create({
   savedBadgeText: { fontSize: 11, color: '#E53935', fontWeight: '600' },
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
   emptyIcon: { fontSize: 56, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#424242', marginBottom: 8 },
-  emptySub: { fontSize: 14, color: '#9E9E9E', textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: t.text, marginBottom: 8 },
+  emptySub: { fontSize: 14, color: t.textMuted, textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 },
 });

@@ -3,31 +3,32 @@ export interface QuoteItem {
   text: string;
   icon: string;
   color: string;
+  category: string;
 }
 
-export const QUOTE_FAV_KEY = '@medvault_quote_favorites';
+export const quoteFavKey = (userId: string) => `@medvault_quote_favorites_${userId}`;
 
 export const ALL_QUOTES: QuoteItem[] = [
-  { id: 'q01', text: 'Your health is an investment, not an expense.', icon: '💚', color: '#00897B' },
-  { id: 'q02', text: 'Prevention is always better than cure.', icon: '🛡️', color: '#1565C0' },
-  { id: 'q03', text: 'Take care of your body — it is the only place you have to live.', icon: '🏃', color: '#FB8C00' },
-  { id: 'q04', text: 'A healthy outside starts from the inside.', icon: '✨', color: '#5E35B1' },
-  { id: 'q05', text: 'The greatest wealth is health.', icon: '💰', color: '#43A047' },
-  { id: 'q06', text: 'Early detection saves lives. Keep up with regular check-ups.', icon: '🔍', color: '#E53935' },
-  { id: 'q07', text: 'Good health is not something we can buy. But it is an extremely valuable savings account.', icon: '⭐', color: '#1565C0' },
-  { id: 'q08', text: 'Keeping medical records organised is one of the best gifts for your future self.', icon: '📋', color: '#00897B' },
-  { id: 'q09', text: 'Your body keeps an accurate journal, regardless of what you write down.', icon: '📝', color: '#5E35B1' },
-  { id: 'q10', text: 'Each report you store today is a piece of your health story for tomorrow.', icon: '🗂️', color: '#FB8C00' },
-  { id: 'q11', text: 'Regular blood tests are a window into your body\'s health story.', icon: '🩸', color: '#E53935' },
-  { id: 'q12', text: 'Every heartbeat is precious. Monitor your cardiac health regularly.', icon: '❤️', color: '#D81B60' },
-  { id: 'q13', text: 'X-ray imaging gives clarity that guides better treatment decisions.', icon: '🩻', color: '#5E35B1' },
-  { id: 'q14', text: 'MRI scans help doctors deliver more precise, personalised care.', icon: '🧠', color: '#3949AB' },
-  { id: 'q15', text: 'Organised prescriptions ensure you never miss the right dose at the right time.', icon: '💊', color: '#43A047' },
-  { id: 'q16', text: 'CT scans reveal what the naked eye cannot see. Always review results with your doctor.', icon: '🔬', color: '#00897B' },
-  { id: 'q17', text: 'Regular ultrasounds are a proactive step in monitoring your internal health.', icon: '🫀', color: '#039BE5' },
-  { id: 'q18', text: 'Discharge summaries are vital reference documents — you are smart to keep them safe.', icon: '📄', color: '#FB8C00' },
-  { id: 'q19', text: 'Vaccinations protect not just you but everyone around you. Stay up to date!', icon: '💉', color: '#8E24AA' },
-  { id: 'q20', text: 'A person who has good health is young, and a person who owes nothing is rich.', icon: '😊', color: '#00897B' },
-  { id: 'q21', text: 'Rest when you are tired, not when you are exhausted. Listen to your body.', icon: '🌙', color: '#3949AB' },
-  { id: 'q22', text: 'Your mental health is just as important as your physical health.', icon: '🧘', color: '#8E24AA' },
+  { id: 'q01', text: 'Drink at least 8 glasses of water daily. Your body is 70% water — keep it flowing.', icon: '💧', color: '#039BE5', category: 'Hydration' },
+  { id: 'q02', text: 'Eat the rainbow every day. Colourful vegetables mean diverse nutrients your body needs.', icon: '🥗', color: '#43A047', category: 'Nutrition' },
+  { id: 'q03', text: 'Turmeric with black pepper is one of nature\'s most powerful anti-inflammatory combinations.', icon: '🌿', color: '#FB8C00', category: 'Superfoods' },
+  { id: 'q04', text: 'A handful of nuts daily reduces the risk of heart disease by up to 30%.', icon: '🥜', color: '#8D6E63', category: 'Heart Health' },
+  { id: 'q05', text: 'Replace white rice with millets or brown rice. Your blood sugar will stay steadier all day.', icon: '🌾', color: '#00897B', category: 'Blood Sugar' },
+  { id: 'q06', text: 'Garlic is nature\'s antibiotic. Add it raw or lightly cooked to your daily meals.', icon: '🧄', color: '#5E35B1', category: 'Superfoods' },
+  { id: 'q07', text: 'Eat fatty fish like salmon or mackerel twice a week. Omega-3s protect your brain and heart.', icon: '🐟', color: '#1565C0', category: 'Omega-3' },
+  { id: 'q08', text: 'Fermented foods like curd, idli and dosa strengthen your gut and boost your immunity naturally.', icon: '🥛', color: '#43A047', category: 'Gut Health' },
+  { id: 'q09', text: 'Breakfast fuels your brain. Skipping it lowers focus, memory and energy for the entire day.', icon: '🍳', color: '#FB8C00', category: 'Meals' },
+  { id: 'q10', text: 'Broccoli, spinach and kale contain iron and folate — eat them 3 times a week.', icon: '🥦', color: '#2E7D32', category: 'Greens' },
+  { id: 'q11', text: 'Excess salt raises blood pressure silently. Season your food with herbs and spices instead.', icon: '🧂', color: '#E53935', category: 'Blood Pressure' },
+  { id: 'q12', text: 'Sugar feeds inflammation. Replace sweets with fruits, dates or a small piece of dark chocolate.', icon: '🍬', color: '#D81B60', category: 'Sugar' },
+  { id: 'q13', text: 'A 30-minute walk after dinner can reduce your blood sugar levels significantly.', icon: '🚶', color: '#00897B', category: 'Exercise' },
+  { id: 'q14', text: 'Lentils and legumes are the best plant-based protein — affordable, filling, and heart-healthy.', icon: '🫘', color: '#8D6E63', category: 'Protein' },
+  { id: 'q15', text: 'Green tea has powerful antioxidants that improve brain function and support fat metabolism.', icon: '🍵', color: '#558B2F', category: 'Beverages' },
+  { id: 'q16', text: 'Blueberries, amla and pomegranate fight free radicals and slow cellular ageing. Eat them daily.', icon: '🫐', color: '#5E35B1', category: 'Antioxidants' },
+  { id: 'q17', text: 'Eating within an 8-hour window each day improves metabolism and reduces belly fat over time.', icon: '🕐', color: '#3949AB', category: 'Diet Tips' },
+  { id: 'q18', text: 'Avocado and olive oil contain healthy fats that lower bad cholesterol and protect your heart.', icon: '🥑', color: '#43A047', category: 'Healthy Fats' },
+  { id: 'q19', text: '7–8 hours of sleep is when your body repairs damaged cells. Sleep is medicine, not laziness.', icon: '😴', color: '#3949AB', category: 'Rest' },
+  { id: 'q20', text: 'Carrots, sweet potato and mangoes are rich in Vitamin A — essential for your eyes and skin.', icon: '🥕', color: '#FB8C00', category: 'Vitamins' },
+  { id: 'q21', text: 'Chew your food slowly. Digestion starts in the mouth, and eating fast leads to overeating.', icon: '🍽️', color: '#00897B', category: 'Digestion' },
+  { id: 'q22', text: 'Cut down on ultra-processed foods. If there are more than 5 ingredients on the label, think twice.', icon: '🚫', color: '#E53935', category: 'Clean Eating' },
 ];

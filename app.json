@@ -2,7 +2,7 @@
   "expo": {
     "name": "MedVault",
     "slug": "MedVault",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -10,6 +10,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.sriharsha.medvault",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -19,11 +21,41 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "icon": "./assets/icon.png",
+      "splash": {
+        "image": "./assets/icon.png",
+        "backgroundColor": "#1565C0"
+      },
+      "themeColor": "#1565C0",
+      "backgroundColor": "#E6F4FE",
+      "display": "standalone",
+      "orientation": "portrait",
+      "name": "MedVault",
+      "shortName": "MedVault",
+      "description": "Your health records, always with you",
+      "lang": "en",
+      "scope": "/"
     },
     "plugins": [
       "expo-asset",
-      "expo-video"
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "MedVault uses Face ID to keep your health records secure."
+        }
+      ],
+      "expo-video",
+      "expo-audio",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1565C0",
+          "sounds": ["./assets/sounds/heartbeat.mp3"]
+        }
+      ]
     ]
   }
 }

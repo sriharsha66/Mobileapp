@@ -36,6 +36,8 @@ export interface MedReport {
   files: MedFile[];
   createdAt: string;
   updatedAt: string;
+  nextVisitDate?: string;       // ISO datetime string, e.g. "2026-07-10T10:30:00"
+  visitNotificationIds?: string[]; // expo-notifications IDs for cancellation
 }
 
 export interface User {
@@ -46,6 +48,7 @@ export interface User {
   dateOfBirth?: string;
   bloodGroup?: string;
   phoneVerified?: boolean;
+  avatar?: string;
   createdAt: string;
 }
 

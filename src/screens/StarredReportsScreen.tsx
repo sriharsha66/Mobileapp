@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme, AppTheme } from '../context/ThemeContext';
 import { getReports } from '../services/storageService';
 import { MedReport, REPORT_TYPE_COLORS, REPORT_TYPE_LABELS } from '../types';
 
@@ -15,6 +16,7 @@ type Props = { navigation: any };
 
 export default function StarredReportsScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const { theme: t } = useTheme();
   const [starredReports, setStarredReports] = useState<MedReport[]>([]);
 
   const load = useCallback(async () => {
@@ -38,6 +40,7 @@ export default function StarredReportsScreen({ navigation }: Props) {
     setStarredReports(prev => prev.filter(r => r.id !== reportId));
   }
 
+  const s = makeStyles(t);
   if (starredReports.length === 0) {
     return (
       <View style={s.emptyContainer}>
@@ -100,15 +103,15 @@ export default function StarredReportsScreen({ navigation }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
+const makeStyles = (t: AppTheme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: t.bg },
   list: { padding: 16, paddingBottom: 40 },
   countLine: {
-    fontSize: 12, fontWeight: '700', color: '#9E9E9E',
+    fontSize: 12, fontWeight: '700', color: t.textMuted,
     textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 14,
   },
   card: {
-    backgroundColor: '#fff', borderRadius: 14, marginBottom: 12,
+    backgroundColor: t.surface, borderRadius: 14, marginBottom: 12,
     flexDirection: 'row', overflow: 'hidden',
     elevation: 2, shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4,
@@ -119,11 +122,11 @@ const s = StyleSheet.create({
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   badgeText: { fontSize: 11, fontWeight: '700' },
   starBtn: { padding: 4 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#212121', marginBottom: 4 },
-  cardMeta: { fontSize: 12, color: '#757575', marginTop: 2 },
-  cardDate: { fontSize: 12, color: '#9E9E9E', marginTop: 4 },
-  emptyContainer: { flex: 1, backgroundColor: '#F5F7FA', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: t.text, marginBottom: 4 },
+  cardMeta: { fontSize: 12, color: t.textSecondary, marginTop: 2 },
+  cardDate: { fontSize: 12, color: t.textMuted, marginTop: 4 },
+  emptyContainer: { flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyIcon: { fontSize: 56, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#424242', marginBottom: 8 },
-  emptySub: { fontSize: 14, color: '#9E9E9E', textAlign: 'center', lineHeight: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: t.text, marginBottom: 8 },
+  emptySub: { fontSize: 14, color: t.textMuted, textAlign: 'center', lineHeight: 20 },
 });

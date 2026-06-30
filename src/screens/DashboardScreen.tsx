@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Dimensions, StatusBar, RefreshControl, ActivityIndicator,
+  Dimensions, StatusBar, RefreshControl, ActivityIndicator, Animated,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -9,7 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { getReports } from '../services/storageService';
 import { MedReport } from '../types';
-import { ALL_QUOTES, QUOTE_FAV_KEY, QuoteItem } from '../constants/quotes';
+import { ALL_QUOTES, quoteFavKey, QuoteItem } from '../constants/quotes';
+import { useTheme, AppTheme } from '../context/ThemeContext';
 
 const W = Dimensions.get('window').width;
 const CARD_W = W - 32;
@@ -49,13 +50,16 @@ function getDailyQuotes(favorites: string[]): QuoteItem[] {
 
 export default function DashboardScreen({ navigation }: { navigation: any }) {
   const { user } = useAuth();
+  const { theme: t } = useTheme();
   const [reports, setReports] = useState<MedReport[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const mainScrollRef = useRef<ScrollView>(null);
   const quoteScrollRef = useRef<ScrollView>(null);
   const autoScrollPaused = useRef(false);
+  const waveAnim = useRef(new Animated.Value(0)).current;
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -65,7 +69,8 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   }, [user]);
 
   const loadFavorites = useCallback(async () => {
-    const json = await AsyncStorage.getItem(QUOTE_FAV_KEY);
+    if (!user) return;
+    const json = await AsyncStorage.getItem(quoteFavKey(user.id));
     setFavorites(json ? JSON.parse(json) : []);
   }, []);
 
@@ -75,9 +80,23 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
     setRefreshing(false);
   }, [load, loadFavorites]);
 
+  const firstName = user?.name?.split(' ')[0] || 'there';
+
   useFocusEffect(useCallback(() => {
     load();
     loadFavorites();
+    mainScrollRef.current?.scrollTo({ y: 0, animated: false });
+
+    // 👋 waves once on every Home tab focus
+    waveAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(waveAnim, { toValue: 1,     duration: 160, useNativeDriver: true }),
+      Animated.timing(waveAnim, { toValue: -0.35, duration: 130, useNativeDriver: true }),
+      Animated.timing(waveAnim, { toValue: 1,     duration: 130, useNativeDriver: true }),
+      Animated.timing(waveAnim, { toValue: -0.35, duration: 130, useNativeDriver: true }),
+      Animated.timing(waveAnim, { toValue: 1,     duration: 130, useNativeDriver: true }),
+      Animated.timing(waveAnim, { toValue: 0,     duration: 160, useNativeDriver: true }),
+    ]).start();
   }, [load, loadFavorites]));
 
   const displayQuotes = useMemo(() => getDailyQuotes(favorites), [favorites]);
@@ -101,7 +120,8 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
       ? favorites.filter(f => f !== id)
       : [...favorites, id];
     setFavorites(updated);
-    await AsyncStorage.setItem(QUOTE_FAV_KEY, JSON.stringify(updated));
+    if (!user) return;
+    await AsyncStorage.setItem(quoteFavKey(user.id), JSON.stringify(updated));
   }
 
   const now = new Date();
@@ -115,9 +135,14 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
   }, {});
   const uniqueHospitals = new Set(reports.map(r => r.hospitalName).filter(Boolean)).size;
 
-  const firstName = user?.name?.split(' ')[0] || 'there';
   const dateStr = now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'long' });
 
+  const waveRotate = waveAnim.interpolate({
+    inputRange: [-0.35, 0, 1],
+    outputRange: ['-12deg', '0deg', '30deg'],
+  });
+
+  const s = useMemo(() => makeStyles(t), [t]);
   return (
     <View style={s.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1565C0" />
@@ -125,7 +150,10 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
       {/* ── Fixed header — never scrolls ── */}
       <View style={s.header}>
         <View style={s.headerLeft}>
-          <Text style={s.greeting}>Hello, {firstName} 👋</Text>
+          <View style={s.greetingRow}>
+            <Text style={s.greeting}>Hello, {firstName} </Text>
+            <Animated.Text style={[s.greetingWave, { transform: [{ rotate: waveRotate }] }]}>👋</Animated.Text>
+          </View>
           <Text style={s.greetingMsg}>{getDailyHeaderMessage()}</Text>
           <Text style={s.dateText}>{dateStr}</Text>
         </View>
@@ -139,6 +167,7 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
 
       {/* ── Scrollable content with pull-to-refresh ── */}
       <ScrollView
+        ref={mainScrollRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scroll}
         refreshControl={
@@ -169,27 +198,41 @@ export default function DashboardScreen({ navigation }: { navigation: any }) {
             }}
             style={{ width: CARD_W }}
           >
-            {displayQuotes.map(item => (
-              <View key={item.id} style={[s.quoteCard, { width: CARD_W, borderLeftColor: item.color }]}>
-                <View style={s.quoteTop}>
-                  <Text style={s.quoteIcon}>{item.icon}</Text>
-                  <TouchableOpacity onPress={() => toggleFavorite(item.id)} style={s.favBtn}>
-                    <Ionicons
-                      name={favorites.includes(item.id) ? 'heart' : 'heart-outline'}
-                      size={22}
-                      color={favorites.includes(item.id) ? '#E53935' : '#BDBDBD'}
-                    />
-                  </TouchableOpacity>
-                </View>
-                <Text style={[s.quoteText, { color: item.color }]}>{item.text}</Text>
-                {favorites.includes(item.id) && (
-                  <View style={s.savedTag}>
-                    <Ionicons name="heart" size={10} color="#E53935" />
-                    <Text style={s.savedTagText}>Saved to Profile</Text>
+            {displayQuotes.map(item => {
+              const isFav = favorites.includes(item.id);
+              return (
+                <View key={item.id} style={[s.quoteCard, { width: CARD_W }]}>
+                  {/* Coloured banner — acts as the visual / image area */}
+                  <View style={[s.quoteBanner, { backgroundColor: item.color + '1A' }]}>
+                    <View style={[s.bannerDeco1, { backgroundColor: item.color + '28' }]} />
+                    <View style={[s.bannerDeco2, { backgroundColor: item.color + '1E' }]} />
+                    <Text style={s.bannerEmoji}>{item.icon}</Text>
+                    <View style={[s.bannerBadge, { backgroundColor: item.color }]}>
+                      <Text style={s.bannerBadgeTxt}>{item.category}</Text>
+                    </View>
                   </View>
-                )}
-              </View>
-            ))}
+                  {/* Quote text + heart */}
+                  <View style={s.quoteBody}>
+                    <Text style={[s.quoteText, { color: t.text }]}>"{item.text}"</Text>
+                    <View style={s.quoteFooter}>
+                      {isFav && (
+                        <View style={s.savedTag}>
+                          <Ionicons name="heart" size={10} color="#E53935" />
+                          <Text style={s.savedTagText}>Saved</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity onPress={() => toggleFavorite(item.id)} style={s.favBtn}>
+                        <Ionicons
+                          name={isFav ? 'heart' : 'heart-outline'}
+                          size={22}
+                          color={isFav ? '#E53935' : '#BDBDBD'}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
           </ScrollView>
           {displayQuotes.length > 1 && (
             <View style={s.dots}>
@@ -261,23 +304,23 @@ function KPITile({ icon, label, value, color }: {
   value: number;
   color: string;
 }) {
+  const { theme: t } = useTheme();
   const tileW = (W - 32 - 28 - 10) / 2;
   return (
-    <View style={[s.kpiTile, { width: tileW, borderLeftColor: color }]}>
-      <View style={[s.kpiIconBox, { backgroundColor: color + '18' }]}>
+    <View style={{ width: tileW, backgroundColor: t.bg, borderRadius: 12, padding: 12, borderLeftWidth: 4, borderLeftColor: color }}>
+      <View style={{ width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 8, backgroundColor: color + '18' }}>
         <Ionicons name={icon} size={20} color={color} />
       </View>
-      <Text style={[s.kpiValue, { color }]}>{value}</Text>
-      <Text style={s.kpiLabel}>{label}</Text>
+      <Text style={{ fontSize: 28, fontWeight: '900', lineHeight: 30, color }}>{value}</Text>
+      <Text style={{ fontSize: 11, color: t.textMuted, marginTop: 3, fontWeight: '500' }}>{label}</Text>
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
+const makeStyles = (t: AppTheme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: t.bg },
   scroll: { paddingBottom: 110 },
 
-  // Fixed header
   header: {
     backgroundColor: '#1565C0',
     paddingTop: 52,
@@ -288,42 +331,67 @@ const s = StyleSheet.create({
     alignItems: 'flex-end',
   },
   headerLeft: { flex: 1, marginRight: 12 },
+  greetingRow: { flexDirection: 'row', alignItems: 'center' },
   greeting: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  greetingWave: { fontSize: 22 },
   greetingMsg: { color: '#BBDEFB', fontSize: 13, marginTop: 2, lineHeight: 18 },
   dateText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 4 },
   headerBadge: { alignItems: 'flex-end', minWidth: 56 },
   badgeNum: { color: '#fff', fontSize: 34, fontWeight: '900', lineHeight: 36 },
   badgeLabel: { color: '#BBDEFB', fontSize: 12 },
 
-  // Quotes
   quotesWrap: { marginHorizontal: 16, marginTop: 16 },
   quoteCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 18,
-    borderLeftWidth: 4,
-    elevation: 3,
+    backgroundColor: t.surface,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    minHeight: 116,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.10,
+    shadowRadius: 8,
   },
-  quoteTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
-  quoteIcon: { fontSize: 28 },
+  quoteBanner: {
+    height: 148,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  bannerDeco1: {
+    position: 'absolute',
+    width: 160, height: 160, borderRadius: 80,
+    top: -48, right: -32,
+  },
+  bannerDeco2: {
+    position: 'absolute',
+    width: 110, height: 110, borderRadius: 55,
+    bottom: -36, left: -22,
+  },
+  bannerEmoji: { fontSize: 64 },
+  bannerBadge: {
+    position: 'absolute',
+    bottom: 10, right: 12,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 20,
+  },
+  bannerBadgeTxt: {
+    fontSize: 10, fontWeight: '700', color: '#fff',
+    textTransform: 'uppercase', letterSpacing: 0.6,
+  } as any,
+  quoteBody: { padding: 16, paddingTop: 12 },
+  quoteText: { fontSize: 14, fontWeight: '600', lineHeight: 22, fontStyle: 'italic' } as any,
+  quoteFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 10, gap: 6 },
   favBtn: { padding: 4 },
-  quoteText: { fontSize: 15, fontWeight: '600', lineHeight: 23 },
-  savedTag: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
+  savedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   savedTagText: { fontSize: 11, color: '#E53935', fontWeight: '600' },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#E0E0E0' },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: t.border },
   dotActive: { width: 20, height: 6, borderRadius: 3, backgroundColor: '#1565C0' },
 
-  // KPI
   kpiCard: {
     margin: 16,
     marginTop: 16,
-    backgroundColor: '#fff',
+    backgroundColor: t.surface,
     borderRadius: 16,
     padding: 14,
     elevation: 2,
@@ -335,28 +403,18 @@ const s = StyleSheet.create({
   kpiTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#9E9E9E',
+    color: t.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 12,
   },
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   kpiLoading: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 },
-  kpiLoadingText: { fontSize: 13, color: '#9E9E9E' },
-  kpiTile: {
-    backgroundColor: '#F8FAFE',
-    borderRadius: 12,
-    padding: 12,
-    borderLeftWidth: 4,
-  },
-  kpiIconBox: { width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  kpiValue: { fontSize: 28, fontWeight: '900', lineHeight: 30 },
-  kpiLabel: { fontSize: 11, color: '#9E9E9E', marginTop: 3, fontWeight: '500' },
+  kpiLoadingText: { fontSize: 13, color: t.textMuted },
 
-  // My Reports shortcut
   reportsBtn: {
     marginHorizontal: 16,
-    backgroundColor: '#fff',
+    backgroundColor: t.surface,
     borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
@@ -371,12 +429,11 @@ const s = StyleSheet.create({
   reportsBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   reportsBtnIcon: {
     width: 46, height: 46, borderRadius: 13,
-    backgroundColor: '#E3F2FD', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: t.primaryLight, alignItems: 'center', justifyContent: 'center',
   },
-  reportsBtnTitle: { fontSize: 15, fontWeight: '700', color: '#212121' },
-  reportsBtnSub: { fontSize: 12, color: '#9E9E9E', marginTop: 2 },
+  reportsBtnTitle: { fontSize: 15, fontWeight: '700', color: t.text },
+  reportsBtnSub: { fontSize: 12, color: t.textMuted, marginTop: 2 },
 
-  // Add button
   addBtn: {
     marginHorizontal: 16,
     marginTop: 12,

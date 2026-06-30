@@ -4,6 +4,7 @@ import {
   Alert, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Keyboard,
   Animated,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -12,8 +13,11 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp, usePreventRemove } from '@react-navigation/native';
 import { MainStackParamList } from '../navigation/types';
 import { useAuth } from '../context/AuthContext';
-import { saveReport, copyFileToStorage, generateId, buildReportTitle, getReports } from '../services/storageService';
-import { MedFile, MedReport, ReportType, REPORT_TYPE_LABELS } from '../types';
+import { useTheme, AppTheme } from '../context/ThemeContext';
+import { saveReport, copyFileToStorage, generateId, buildReportTitle, getReports, fileIdFromUri } from '../services/storageService';
+import { scheduleVisitNotifications } from '../services/notificationService';
+import { MedFile, MedReport, ReportType, REPORT_TYPE_LABELS, REPORT_TYPE_COLORS } from '../types';
+import { hapticSuccess } from '../utils/haptics';
 
 type Props = {
   navigation: NativeStackNavigationProp<MainStackParamList, 'Upload'>;
@@ -25,12 +29,40 @@ const REPORT_TYPES: ReportType[] = [
   'ultrasound', 'prescription', 'discharge_summary', 'vaccination', 'other',
 ];
 
+const TYPE_ICONS: Record<ReportType, keyof typeof Ionicons.glyphMap> = {
+  blood_test: 'water-outline',
+  ecg: 'pulse-outline',
+  xray: 'scan-outline',
+  mri: 'aperture-outline',
+  ct_scan: 'radio-outline',
+  ultrasound: 'wifi-outline',
+  prescription: 'medical-outline',
+  discharge_summary: 'document-text-outline',
+  vaccination: 'shield-checkmark-outline',
+  other: 'ellipsis-horizontal-circle-outline',
+};
+
+const TYPE_DETAILS: Record<ReportType, string> = {
+  blood_test: 'CBC, lipid panel, glucose, thyroid, HbA1c',
+  ecg: 'Electrocardiogram, cardiac stress test, Holter',
+  xray: 'Chest, bone, dental, spine X-rays',
+  mri: 'Brain, spine, joint, abdominal MRI scans',
+  ct_scan: 'Chest, abdomen, head, cardiac CT',
+  ultrasound: 'Abdominal, cardiac, obstetric, renal',
+  prescription: 'Medicine prescriptions, dosage & duration',
+  discharge_summary: 'Hospital discharge notes, surgery records',
+  vaccination: 'Immunization records, boosters, travel vaccines',
+  other: 'Any other medical document or report',
+};
+
 export default function UploadScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const { theme: t } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
 
   const [reportType, setReportType] = useState<ReportType | null>(null);
   const [otherTypeName, setOtherTypeName] = useState('');
+  const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [hospitalName, setHospitalName] = useState('');
   const [hospitalSuggestions, setHospitalSuggestions] = useState<string[]>([]);
@@ -47,6 +79,9 @@ export default function UploadScreen({ navigation }: Props) {
   const [pincodeInput, setPincodeInput] = useState('');
   const [pincodeHint, setPincodeHint] = useState('');
   const [pincodeLoading, setPincodeLoading] = useState(false);
+  const [nextVisitDate, setNextVisitDate] = useState<Date | null>(null);
+  const [pickerPhase, setPickerPhase] = useState<'none' | 'date' | 'time'>('none');
+  const [pickerTemp, setPickerTemp] = useState(new Date());
 
   const dateRef = useRef<TextInput>(null);
   const otherTypeRef = useRef<TextInput>(null);
@@ -109,6 +144,10 @@ export default function UploadScreen({ navigation }: Props) {
   }
 
   async function pickFromCamera() {
+    if (Platform.OS === 'web') {
+      // Web: camera not reliably supported — fall back to gallery file picker
+      return pickFromGallery();
+    }
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) { Alert.alert('Permission needed', 'Camera access is required.'); return; }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.85, videoMaxDuration: 120 });
@@ -120,8 +159,10 @@ export default function UploadScreen({ navigation }: Props) {
   }
 
   async function pickFromGallery() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permission needed', 'Gallery access is required.'); return; }
+    if (Platform.OS !== 'web') {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Permission needed', 'Gallery access is required.'); return; }
+    }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], allowsMultipleSelection: true, quality: 0.85 });
     if (!result.canceled) {
       for (const asset of result.assets) {
@@ -132,7 +173,11 @@ export default function UploadScreen({ navigation }: Props) {
   }
 
   async function pickDocument() {
-    const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', '*/*'], multiple: true, copyToCacheDirectory: true });
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', '*/*'],
+      multiple: Platform.OS !== 'web', // web only supports single file pick
+      copyToCacheDirectory: true,
+    });
     if (!result.canceled) {
       for (const asset of result.assets) {
         const fileType = getFileType(asset.mimeType || '', asset.name);
@@ -151,10 +196,11 @@ export default function UploadScreen({ navigation }: Props) {
 
   async function addFile(uri: string, name: string, type: MedFile['type'], mimeType: string, size: number) {
     try {
-      const destUri = await copyFileToStorage(user!.id, uri, name);
-      setFiles(prev => [...prev, { id: generateId(), name, uri: destUri, type, mimeType, size, createdAt: new Date().toISOString() }]);
+      const serverUri = await copyFileToStorage(user!.id, uri, name, mimeType);
+      const serverId  = fileIdFromUri(serverUri);
+      setFiles(prev => [...prev, { id: serverId, name, uri: serverUri, type, mimeType, size, createdAt: new Date().toISOString() }]);
     } catch {
-      Alert.alert('Error', 'Could not copy file. Please try again.');
+      Alert.alert('Error', 'Could not upload file. Please try again.');
     }
   }
 
@@ -172,8 +218,20 @@ export default function UploadScreen({ navigation }: Props) {
     try {
       const typeLabel = reportType === 'other' ? otherTypeName.trim() : reportType;
       const title = buildReportTitle(typeLabel, hospitalName.trim(), date);
+      const reportId = generateId();
+      let visitNotificationIds: string[] | undefined;
+      if (nextVisitDate) {
+        const ids = await scheduleVisitNotifications({
+          reportId,
+          reportTitle: title,
+          doctorName: doctorName.trim(),
+          hospitalName: hospitalName.trim(),
+          visitDate: nextVisitDate,
+        });
+        if (ids.length > 0) visitNotificationIds = ids;
+      }
       const report: MedReport = {
-        id: generateId(), title, date,
+        id: reportId, title, date,
         hospitalName: hospitalName.trim(),
         hospitalAddress: hospitalAddress.trim(),
         doctorName: doctorName.trim(),
@@ -182,10 +240,13 @@ export default function UploadScreen({ navigation }: Props) {
         notes: notes.trim(), files,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        nextVisitDate: nextVisitDate?.toISOString(),
+        visitNotificationIds,
       };
       await saveReport(user!.id, report);
       setSaving(false);
       setAllowLeave(true);
+      hapticSuccess();
       setSaveSuccess(true);
       checkmarkScale.setValue(0);
       Animated.spring(checkmarkScale, { toValue: 1, tension: 50, friction: 6, useNativeDriver: true }).start();
@@ -196,6 +257,7 @@ export default function UploadScreen({ navigation }: Props) {
     }
   }
 
+  const styles = makeStyles(t);
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -210,37 +272,72 @@ export default function UploadScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         <Section title="Select Report Type *">
-          {!reportType && (
-            <Text style={styles.typeHint}>Tap a type below to get started</Text>
-          )}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {REPORT_TYPES.map(t => (
-              <TouchableOpacity
-                key={t}
-                style={[styles.typeChip, reportType === t && styles.typeChipActive]}
-                onPress={() => {
-                  const next = reportType === t ? null : t;
-                  setReportType(next);
-                  if (next === 'other') {
-                    setTimeout(() => otherTypeRef.current?.focus(), 100);
-                  }
-                }}
-              >
-                <View style={styles.chipInner}>
-                  <Text style={[styles.typeChipText, reportType === t && styles.typeChipTextActive]}>
-                    {REPORT_TYPE_LABELS[t]}
-                  </Text>
-                  {reportType === t && (
-                    <Ionicons name="checkmark" size={12} color="#fff" style={{ marginLeft: 4 }} />
-                  )}
+          {/* Tap to toggle inline grid — matches the Next Visit calendar pattern */}
+          <TouchableOpacity
+            style={[styles.ddTrigger, (reportType || typePickerOpen) && styles.ddTriggerSelected]}
+            onPress={() => { Keyboard.dismiss(); setTypePickerOpen(p => !p); }}
+            activeOpacity={0.75}
+          >
+            {reportType ? (
+              <View style={styles.ddTriggerRow}>
+                <View style={[styles.ddTriggerIconBox, { backgroundColor: REPORT_TYPE_COLORS[reportType] + '22' }]}>
+                  <Ionicons name={TYPE_ICONS[reportType]} size={20} color={REPORT_TYPE_COLORS[reportType]} />
                 </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ddTriggerLabel}>{REPORT_TYPE_LABELS[reportType]}</Text>
+                  <Text style={styles.ddTriggerSub} numberOfLines={1}>{TYPE_DETAILS[reportType]}</Text>
+                </View>
+                <Ionicons name={typePickerOpen ? 'chevron-up' : 'chevron-down'} size={18} color={t.textMuted} />
+              </View>
+            ) : (
+              <View style={styles.ddTriggerRow}>
+                <Ionicons name="list-outline" size={20} color={t.textMuted} style={{ marginRight: 10 }} />
+                <Text style={[styles.ddTriggerLabel, { color: t.textMuted, fontWeight: '400' }]}>
+                  Tap to select report type…
+                </Text>
+                <Ionicons name={typePickerOpen ? 'chevron-up' : 'chevron-down'} size={18} color={t.textMuted} />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Inline type grid — expands in place, no modal */}
+          {typePickerOpen && (
+            <View style={styles.typeGrid}>
+              {REPORT_TYPES.map(rtype => {
+                const isSelected = reportType === rtype;
+                const color = REPORT_TYPE_COLORS[rtype];
+                return (
+                  <TouchableOpacity
+                    key={rtype}
+                    style={[styles.typeGridItem, isSelected && styles.typeGridItemSelected]}
+                    onPress={() => {
+                      setReportType(isSelected ? null : rtype);
+                      setTypePickerOpen(false);
+                      if (rtype === 'other' && !isSelected) setTimeout(() => otherTypeRef.current?.focus(), 100);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.typeGridIcon, { backgroundColor: isSelected ? color + '33' : color + '18' }]}>
+                      <Ionicons name={TYPE_ICONS[rtype]} size={22} color={color} />
+                    </View>
+                    <Text style={[styles.typeGridLabel, isSelected && { color: '#1565C0' }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75}>
+                      {REPORT_TYPE_LABELS[rtype]}
+                    </Text>
+                    {isSelected && (
+                      <View style={styles.typeGridCheck}>
+                        <Ionicons name="checkmark-circle" size={16} color="#1565C0" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
           {reportType === 'other' && (
             <TextInput
               ref={otherTypeRef}
-              style={[styles.input, { marginTop: 8 }]}
+              style={[styles.input, { marginTop: 10 }]}
               value={otherTypeName}
               onChangeText={setOtherTypeName}
               placeholder="e.g. Allergy Test, Sleep Study…"
@@ -356,6 +453,72 @@ export default function UploadScreen({ navigation }: Props) {
           />
         </Section>
 
+        <Section title="Next Visit / Follow-up (Optional)">
+          {nextVisitDate ? (
+            <View style={styles.visitSelectedRow}>
+              <Ionicons name="calendar" size={18} color="#1565C0" style={{ marginRight: 8 }} />
+              <Text style={styles.visitSelectedText}>{formatVisitDate(nextVisitDate)}</Text>
+              <TouchableOpacity onPress={() => { Keyboard.dismiss(); setPickerTemp(nextVisitDate); setPickerPhase('date'); }} style={{ marginLeft: 8 }}>
+                <Ionicons name="pencil" size={16} color="#9E9E9E" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setNextVisitDate(null)} style={{ marginLeft: 8 }}>
+                <Ionicons name="close-circle" size={20} color="#EF5350" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.visitBtn} onPress={() => { Keyboard.dismiss(); setPickerTemp(new Date()); setPickerPhase('date'); }}>
+              <Ionicons name="calendar-outline" size={20} color="#1565C0" />
+              <Text style={styles.visitBtnText}>Set Next Visit Date & Reminder</Text>
+            </TouchableOpacity>
+          )}
+
+          {pickerPhase !== 'none' && (
+            <View style={styles.pickerWrap}>
+              <Text style={styles.pickerStep}>
+                {pickerPhase === 'date' ? 'Step 1 of 2 — Pick date' : 'Step 2 of 2 — Pick time'}
+              </Text>
+              <DateTimePicker
+                value={pickerTemp}
+                mode={pickerPhase === 'date' ? 'date' : 'time'}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                minimumDate={pickerPhase === 'date' ? new Date() : undefined}
+                onChange={(event, selectedDate) => {
+                  if (Platform.OS === 'android') {
+                    if (event.type === 'dismissed') { setPickerPhase('none'); return; }
+                    const d = selectedDate ?? pickerTemp;
+                    if (pickerPhase === 'date') { setPickerTemp(d); setPickerPhase('time'); }
+                    else { setNextVisitDate(d); setPickerPhase('none'); }
+                    return;
+                  }
+                  if (selectedDate) setPickerTemp(selectedDate);
+                }}
+              />
+              {Platform.OS === 'ios' && (
+                <View style={styles.pickerActions}>
+                  <TouchableOpacity onPress={() => setPickerPhase('none')}>
+                    <Text style={styles.pickerCancel}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => {
+                    if (pickerPhase === 'date') setPickerPhase('time');
+                    else { setNextVisitDate(pickerTemp); setPickerPhase('none'); }
+                  }}>
+                    <Text style={styles.pickerConfirm}>{pickerPhase === 'date' ? 'Next →' : 'Set Reminder'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+
+          {nextVisitDate && !pickerPhase && (
+            <View style={styles.reminderInfo}>
+              <Ionicons name="notifications-outline" size={14} color="#1565C0" style={{ marginRight: 6 }} />
+              <Text style={styles.reminderText}>
+                Reminder notifications every 4 hrs, starting 24 hrs before your visit
+              </Text>
+            </View>
+          )}
+        </Section>
+
         <Section title="Files & Photos *">
           <View style={styles.fileActions}>
             <FileBtn icon="camera" label="Camera" onPress={pickFromCamera} />
@@ -408,16 +571,26 @@ export default function UploadScreen({ navigation }: Props) {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const { theme: t } = useTheme();
+  const styles = makeStyles(t);
   return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text>{children}</View>;
 }
 
 function FileBtn({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  const { theme: t } = useTheme();
+  const styles = makeStyles(t);
   return (
     <TouchableOpacity style={styles.fileBtn} onPress={onPress}>
       <Ionicons name={icon} size={26} color="#1565C0" />
       <Text style={styles.fileBtnText}>{label}</Text>
     </TouchableOpacity>
   );
+}
+
+function formatVisitDate(d: Date): string {
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    + '  '
+    + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
 function fileEmoji(type: MedFile['type']): string {
@@ -429,58 +602,119 @@ function fileEmoji(type: MedFile['type']): string {
   }
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#F5F7FA' },
+const makeStyles = (t: AppTheme) => StyleSheet.create({
+  flex: { flex: 1, backgroundColor: t.bg },
   container: { flex: 1 },
   content: { padding: 16, paddingBottom: 24 },
   section: { marginBottom: 4 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#616161', marginTop: 16, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 },
-  typeHint: { fontSize: 12, color: '#FB8C00', fontWeight: '600', marginBottom: 8 },
-  typeChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#E3F2FD', marginRight: 8 },
-  typeChipActive: { backgroundColor: '#1565C0' },
-  chipInner: { flexDirection: 'row', alignItems: 'center' },
-  typeChipText: { fontSize: 13, color: '#1565C0', fontWeight: '600' },
-  typeChipTextActive: { color: '#fff' },
-  input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#E0E0E0', padding: 12, fontSize: 14, color: '#212121' },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: t.textSecondary, marginTop: 16, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 },
+  // Type selector trigger
+  ddTrigger: {
+    backgroundColor: t.surface,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: t.border,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  ddTriggerSelected: { borderColor: '#1565C0' },
+  ddTriggerRow: { flexDirection: 'row', alignItems: 'center' },
+  ddTriggerIconBox: {
+    width: 38, height: 38, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
+  ddTriggerLabel: { fontSize: 15, fontWeight: '700', color: t.text },
+  ddTriggerSub: { fontSize: 12, color: t.textMuted, marginTop: 1 },
+  // Inline type grid (like the Next Visit date picker — expands in place)
+  typeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: t.surface,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#1565C0',
+  },
+  typeGridItem: {
+    width: '22%',
+    flexGrow: 1,
+    backgroundColor: t.inputBg,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    gap: 7,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    position: 'relative' as const,
+  },
+  typeGridItemSelected: {
+    backgroundColor: t.primaryLight,
+    borderColor: '#1565C0',
+  },
+  typeGridIcon: {
+    width: 42, height: 42, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  typeGridLabel: {
+    fontSize: 10, fontWeight: '600', color: t.text,
+    textAlign: 'center' as const, lineHeight: 13,
+    letterSpacing: -0.1,
+  },
+  typeGridCheck: {
+    position: 'absolute' as const, top: 5, right: 5,
+  },
+  input: { backgroundColor: t.surface, borderRadius: 10, borderWidth: 1.5, borderColor: t.border, padding: 12, fontSize: 14, color: t.text },
   multiline: { minHeight: 70, paddingTop: 12 },
   notesInput: { minHeight: 100, paddingTop: 12 },
-  // Hospital suggestions
   suggestionBox: {
-    backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#E3F2FD',
+    backgroundColor: t.surface, borderRadius: 10, borderWidth: 1.5, borderColor: t.primaryLight,
     marginTop: 4, overflow: 'hidden', elevation: 3,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4,
   },
-  suggestionItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
-  suggestionText: { fontSize: 14, color: '#212121' },
-  // Pincode
+  suggestionItem: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: t.divider },
+  suggestionText: { fontSize: 14, color: t.text },
   pincodeRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#F5F7FA', borderRadius: 10,
-    borderWidth: 1.5, borderColor: '#E0E0E0', marginTop: 8, paddingRight: 8,
+    backgroundColor: t.inputBg, borderRadius: 10,
+    borderWidth: 1.5, borderColor: t.border, marginTop: 8, paddingRight: 8,
   },
   pincodeIcon: { marginLeft: 10, marginRight: 4 },
-  pincodeInput: { flex: 1, paddingVertical: 10, paddingHorizontal: 6, fontSize: 13, color: '#212121' },
+  pincodeInput: { flex: 1, paddingVertical: 10, paddingHorizontal: 6, fontSize: 13, color: t.text },
   pincodeHint: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: '#E8F5E9', borderRadius: 8, padding: 10, marginTop: 6,
   },
   pincodeHintText: { flex: 1, fontSize: 13, color: '#2E7D32' },
-  // Files
+  visitBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: t.primaryLight, borderRadius: 10, padding: 12 },
+  visitBtnText: { fontSize: 14, color: '#1565C0', fontWeight: '600' },
+  visitSelectedRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.primaryLight, borderRadius: 10, padding: 12 },
+  visitSelectedText: { flex: 1, fontSize: 14, color: '#1565C0', fontWeight: '600' },
+  pickerWrap: { backgroundColor: t.surface, borderRadius: 12, borderWidth: 1, borderColor: t.border, marginTop: 8, overflow: 'hidden' },
+  pickerStep: { fontSize: 12, fontWeight: '700', color: t.textMuted, textAlign: 'center', paddingTop: 10, textTransform: 'uppercase', letterSpacing: 0.6 },
+  pickerActions: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: t.divider },
+  pickerCancel: { fontSize: 15, color: t.textMuted, fontWeight: '600' },
+  pickerConfirm: { fontSize: 15, color: '#1565C0', fontWeight: '700' },
+  reminderInfo: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#E3F2FD', borderRadius: 8, padding: 10, marginTop: 8 },
+  reminderText: { flex: 1, fontSize: 12, color: '#1565C0', lineHeight: 17 },
   fileActions: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  fileBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1.5, borderColor: '#BBDEFB', borderStyle: 'dashed', alignItems: 'center', paddingVertical: 14, gap: 4 },
+  fileBtn: { flex: 1, backgroundColor: t.surface, borderRadius: 12, borderWidth: 1.5, borderColor: t.border, borderStyle: 'dashed', alignItems: 'center', paddingVertical: 14, gap: 4 },
   fileBtnText: { fontSize: 12, color: '#1565C0', fontWeight: '600' },
   fileList: { gap: 8 },
-  fileItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, padding: 10, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+  fileItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.surface, borderRadius: 10, padding: 10, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
   fileThumb: { width: 44, height: 44, borderRadius: 6, marginRight: 10 },
-  fileIconBox: { width: 44, height: 44, borderRadius: 6, backgroundColor: '#E3F2FD', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  fileIconBox: { width: 44, height: 44, borderRadius: 6, backgroundColor: t.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
   fileIconEmoji: { fontSize: 22 },
-  fileName: { flex: 1, fontSize: 13, color: '#424242' },
+  fileName: { flex: 1, fontSize: 13, color: t.text },
   removeBtn: { padding: 4 },
-  // Sticky footer
   stickyFooter: {
-    backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: t.surface, paddingHorizontal: 16, paddingVertical: 12,
     paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    borderTopWidth: 1, borderTopColor: '#E0E0E0',
+    borderTopWidth: 1, borderTopColor: t.border,
     elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.08, shadowRadius: 4,
   },
   saveBtn: { backgroundColor: '#1565C0', borderRadius: 12, padding: 15, alignItems: 'center', elevation: 2 },
@@ -494,7 +728,7 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   overlayCard: {
-    backgroundColor: '#fff',
+    backgroundColor: t.surface,
     borderRadius: 20,
     paddingVertical: 32,
     paddingHorizontal: 40,
@@ -508,7 +742,7 @@ const styles = StyleSheet.create({
   overlayText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#212121',
+    color: t.text,
     marginTop: 14,
   },
 });

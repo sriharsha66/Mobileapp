@@ -21,14 +21,17 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp, usePreventRemove } from '@react-navigation/native';
 import { MainStackParamList } from '../navigation/types';
 import { useAuth } from '../context/AuthContext';
+import { useTheme, AppTheme } from '../context/ThemeContext';
 import {
   getReports,
   saveReport,
   copyFileToStorage,
   generateId,
   buildReportTitle,
+  fileIdFromUri,
 } from '../services/storageService';
-import { MedFile, MedReport, ReportType, REPORT_TYPE_LABELS } from '../types';
+import { MedFile, MedReport, ReportType, REPORT_TYPE_LABELS, REPORT_TYPE_COLORS } from '../types';
+import { hapticSuccess } from '../utils/haptics';
 
 type Props = {
   navigation: NativeStackNavigationProp<MainStackParamList, 'EditReport'>;
@@ -40,8 +43,35 @@ const REPORT_TYPES: ReportType[] = [
   'ultrasound', 'prescription', 'discharge_summary', 'vaccination', 'other',
 ];
 
+const TYPE_ICONS: Record<ReportType, keyof typeof Ionicons.glyphMap> = {
+  blood_test: 'water-outline',
+  ecg: 'pulse-outline',
+  xray: 'scan-outline',
+  mri: 'aperture-outline',
+  ct_scan: 'radio-outline',
+  ultrasound: 'wifi-outline',
+  prescription: 'medical-outline',
+  discharge_summary: 'document-text-outline',
+  vaccination: 'shield-checkmark-outline',
+  other: 'ellipsis-horizontal-circle-outline',
+};
+
+const TYPE_DETAILS: Record<ReportType, string> = {
+  blood_test: 'CBC, lipid panel, glucose, thyroid, HbA1c',
+  ecg: 'Electrocardiogram, cardiac stress test, Holter',
+  xray: 'Chest, bone, dental, spine X-rays',
+  mri: 'Brain, spine, joint, abdominal MRI scans',
+  ct_scan: 'Chest, abdomen, head, cardiac CT',
+  ultrasound: 'Abdominal, cardiac, obstetric, renal',
+  prescription: 'Medicine prescriptions, dosage & duration',
+  discharge_summary: 'Hospital discharge notes, surgery records',
+  vaccination: 'Immunization records, boosters, travel vaccines',
+  other: 'Any other medical document or report',
+};
+
 export default function EditReportScreen({ navigation, route }: Props) {
   const { user } = useAuth();
+  const { theme: t } = useTheme();
   const { reportId } = route.params;
 
   const [reportType, setReportType] = useState<ReportType>('blood_test');
@@ -62,6 +92,7 @@ export default function EditReportScreen({ navigation, route }: Props) {
   const [hospitalSuggestions, setHospitalSuggestions] = useState<string[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [allowLeave, setAllowLeave] = useState(false);
+  const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const checkmarkScale = useRef(new Animated.Value(0)).current;
 
@@ -138,6 +169,9 @@ export default function EditReportScreen({ navigation, route }: Props) {
   }
 
   async function pickFromCamera() {
+    if (Platform.OS === 'web') {
+      return pickFromGallery();
+    }
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) { Alert.alert('Permission needed', 'Camera access is required.'); return; }
     const result = await ImagePicker.launchCameraAsync({
@@ -152,8 +186,10 @@ export default function EditReportScreen({ navigation, route }: Props) {
   }
 
   async function pickFromGallery() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permission needed', 'Gallery access is required.'); return; }
+    if (Platform.OS !== 'web') {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Permission needed', 'Gallery access is required.'); return; }
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       allowsMultipleSelection: true,
@@ -168,7 +204,11 @@ export default function EditReportScreen({ navigation, route }: Props) {
   }
 
   async function pickDocument() {
-    const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', '*/*'], multiple: true, copyToCacheDirectory: true });
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', '*/*'],
+      multiple: Platform.OS !== 'web',
+      copyToCacheDirectory: true,
+    });
     if (!result.canceled) {
       for (const asset of result.assets) {
         const fileType = getFileType(asset.mimeType || '', asset.name);
@@ -187,10 +227,11 @@ export default function EditReportScreen({ navigation, route }: Props) {
 
   async function addFile(uri: string, name: string, type: MedFile['type'], mimeType: string, size: number) {
     try {
-      const destUri = await copyFileToStorage(user!.id, uri, name);
-      setFiles((prev) => [...prev, { id: generateId(), name, uri: destUri, type, mimeType, size, createdAt: new Date().toISOString() }]);
+      const serverUri = await copyFileToStorage(user!.id, uri, name);
+      const serverId  = fileIdFromUri(serverUri);
+      setFiles((prev) => [...prev, { id: serverId, name, uri: serverUri, type, mimeType, size, createdAt: new Date().toISOString() }]);
     } catch {
-      Alert.alert('Error', 'Could not copy file.');
+      Alert.alert('Error', 'Could not upload file.');
     }
   }
 
@@ -241,6 +282,7 @@ export default function EditReportScreen({ navigation, route }: Props) {
       await saveReport(user!.id, updated);
       setSaving(false);
       setAllowLeave(true);
+      hapticSuccess();
       setSaveSuccess(true);
       checkmarkScale.setValue(0);
       Animated.spring(checkmarkScale, { toValue: 1, tension: 50, friction: 6, useNativeDriver: true }).start();
@@ -251,6 +293,7 @@ export default function EditReportScreen({ navigation, route }: Props) {
     }
   }
 
+  const styles = makeStyles(t);
   if (!loaded) {
     return <View style={styles.loading}><ActivityIndicator size="large" color="#1565C0" /></View>;
   }
@@ -263,21 +306,61 @@ export default function EditReportScreen({ navigation, route }: Props) {
     <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
 
       <SectionLabel title="Report Type" />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
-        {REPORT_TYPES.map((t) => (
-          <TouchableOpacity
-            key={t}
-            style={[styles.typeChip, reportType === t && styles.typeChipActive]}
-            onPress={() => { setReportType(t); setIsDirty(true); if (t === 'other') setTimeout(() => otherTypeRef.current?.focus(), 100); }}
-          >
-            <Text style={[styles.typeChipText, reportType === t && styles.typeChipTextActive]}>{REPORT_TYPE_LABELS[t]}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <TouchableOpacity
+        style={[styles.ddTrigger, styles.ddTriggerSelected]}
+        onPress={() => { Keyboard.dismiss(); setTypePickerOpen(p => !p); }}
+        activeOpacity={0.75}
+      >
+        <View style={styles.ddTriggerRow}>
+          <View style={[styles.ddTriggerIconBox, { backgroundColor: REPORT_TYPE_COLORS[reportType] + '22' }]}>
+            <Ionicons name={TYPE_ICONS[reportType]} size={20} color={REPORT_TYPE_COLORS[reportType]} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.ddTriggerLabel}>{REPORT_TYPE_LABELS[reportType]}</Text>
+            <Text style={styles.ddTriggerSub} numberOfLines={1}>{TYPE_DETAILS[reportType]}</Text>
+          </View>
+          <Ionicons name={typePickerOpen ? 'chevron-up' : 'chevron-down'} size={18} color={t.textMuted} />
+        </View>
+      </TouchableOpacity>
+
+      {typePickerOpen && (
+        <View style={styles.typeGrid}>
+          {REPORT_TYPES.map(rtype => {
+            const isSelected = reportType === rtype;
+            const color = REPORT_TYPE_COLORS[rtype];
+            return (
+              <TouchableOpacity
+                key={rtype}
+                style={[styles.typeGridItem, isSelected && styles.typeGridItemSelected]}
+                onPress={() => {
+                  setReportType(rtype);
+                  setIsDirty(true);
+                  setTypePickerOpen(false);
+                  if (rtype === 'other') setTimeout(() => otherTypeRef.current?.focus(), 100);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.typeGridIcon, { backgroundColor: isSelected ? color + '33' : color + '18' }]}>
+                  <Ionicons name={TYPE_ICONS[rtype]} size={22} color={color} />
+                </View>
+                <Text style={[styles.typeGridLabel, isSelected && { color: '#1565C0' }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75}>
+                  {REPORT_TYPE_LABELS[rtype]}
+                </Text>
+                {isSelected && (
+                  <View style={styles.typeGridCheck}>
+                    <Ionicons name="checkmark-circle" size={16} color="#1565C0" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
       {reportType === 'other' && (
         <TextInput
           ref={otherTypeRef}
-          style={[styles.input, { marginBottom: 4 }]}
+          style={[styles.input, { marginTop: 10, marginBottom: 4 }]}
           value={otherTypeName}
           onChangeText={v => { setOtherTypeName(v); setIsDirty(true); }}
           placeholder="e.g. Allergy Test, Sleep Study…"
@@ -417,6 +500,8 @@ export default function EditReportScreen({ navigation, route }: Props) {
 }
 
 function SectionLabel({ title }: { title: string }) {
+  const { theme: t } = useTheme();
+  const styles = makeStyles(t);
   return <Text style={styles.sectionTitle}>{title}</Text>;
 }
 
@@ -429,61 +514,92 @@ function fileEmoji(type: MedFile['type']): string {
   }
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
+const makeStyles = (t: AppTheme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, paddingBottom: 24 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#616161', marginTop: 16, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 },
-  typeChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#E3F2FD', marginRight: 8 },
-  typeChipActive: { backgroundColor: '#1565C0' },
-  typeChipText: { fontSize: 13, color: '#1565C0', fontWeight: '600' },
-  typeChipTextActive: { color: '#fff' },
-  input: { backgroundColor: '#fff', borderRadius: 10, borderWidth: 1.5, borderColor: '#E0E0E0', padding: 12, fontSize: 14, color: '#212121' },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: t.textSecondary, marginTop: 16, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.6 },
+  ddTrigger: {
+    backgroundColor: t.surface, borderRadius: 12, borderWidth: 1.5,
+    borderColor: t.border, paddingVertical: 13, paddingHorizontal: 14,
+    minHeight: 56, justifyContent: 'center',
+  },
+  ddTriggerSelected: { borderColor: '#1565C0' },
+  ddTriggerRow: { flexDirection: 'row', alignItems: 'center' },
+  ddTriggerIconBox: {
+    width: 38, height: 38, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
+  ddTriggerLabel: { fontSize: 15, fontWeight: '700', color: t.text },
+  ddTriggerSub: { fontSize: 12, color: t.textMuted, marginTop: 1 },
+  typeGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8,
+    padding: 10, backgroundColor: t.surface,
+    borderRadius: 12, borderWidth: 1.5, borderColor: '#1565C0',
+  },
+  typeGridItem: {
+    width: '22%', flexGrow: 1, backgroundColor: t.inputBg,
+    borderRadius: 10, paddingVertical: 12, paddingHorizontal: 6,
+    alignItems: 'center', gap: 7, borderWidth: 1.5,
+    borderColor: 'transparent', position: 'relative' as const,
+  },
+  typeGridItemSelected: { backgroundColor: t.primaryLight, borderColor: '#1565C0' },
+  typeGridIcon: {
+    width: 42, height: 42, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  typeGridLabel: {
+    fontSize: 10, fontWeight: '600', color: t.text,
+    textAlign: 'center' as const, lineHeight: 13,
+    letterSpacing: -0.1,
+  },
+  typeGridCheck: { position: 'absolute' as const, top: 5, right: 5 },
+  input: { backgroundColor: t.surface, borderRadius: 10, borderWidth: 1.5, borderColor: t.border, padding: 12, fontSize: 14, color: t.text },
   multiline: { minHeight: 70, paddingTop: 12 },
   notesInput: { minHeight: 100, paddingTop: 12 },
   pincodeRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#F5F7FA', borderRadius: 10,
-    borderWidth: 1.5, borderColor: '#E0E0E0',
+    backgroundColor: t.inputBg, borderRadius: 10,
+    borderWidth: 1.5, borderColor: t.border,
     marginTop: 8, paddingRight: 8,
   },
-  pincodeInput: { flex: 1, paddingVertical: 10, paddingHorizontal: 6, fontSize: 13, color: '#212121' },
+  pincodeInput: { flex: 1, paddingVertical: 10, paddingHorizontal: 6, fontSize: 13, color: t.text },
   pincodeHint: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: '#E8F5E9', borderRadius: 8, padding: 10, marginTop: 6,
   },
   pincodeHintText: { flex: 1, fontSize: 13, color: '#2E7D32' },
   fileActions: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  fileBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1.5, borderColor: '#BBDEFB', borderStyle: 'dashed', alignItems: 'center', paddingVertical: 12, gap: 4 },
+  fileBtn: { flex: 1, backgroundColor: t.surface, borderRadius: 12, borderWidth: 1.5, borderColor: t.border, borderStyle: 'dashed', alignItems: 'center', paddingVertical: 12, gap: 4 },
   fileBtnText: { fontSize: 12, color: '#1565C0', fontWeight: '600' },
   fileList: { gap: 8 },
-  fileItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, padding: 10, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+  fileItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.surface, borderRadius: 10, padding: 10, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
   fileThumb: { width: 44, height: 44, borderRadius: 6, marginRight: 10 },
-  fileIconBox: { width: 44, height: 44, borderRadius: 6, backgroundColor: '#E3F2FD', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  fileName: { flex: 1, fontSize: 13, color: '#424242' },
+  fileIconBox: { width: 44, height: 44, borderRadius: 6, backgroundColor: t.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  fileName: { flex: 1, fontSize: 13, color: t.text },
   removeBtn: { padding: 4 },
   saveBtn: { backgroundColor: '#1565C0', borderRadius: 12, padding: 15, alignItems: 'center', elevation: 3 },
   saveBtnDisabled: { opacity: 0.7 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   stickyFooter: {
-    backgroundColor: '#fff',
+    backgroundColor: t.surface,
     borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopColor: t.border,
     padding: 16,
     elevation: 8,
     paddingBottom: Platform.OS === 'ios' ? 28 : 12,
   },
   suggestionBox: {
-    backgroundColor: '#fff', borderRadius: 10, borderWidth: 1,
-    borderColor: '#E0E0E0', marginTop: 4, elevation: 4,
+    backgroundColor: t.surface, borderRadius: 10, borderWidth: 1,
+    borderColor: t.border, marginTop: 4, elevation: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08, shadowRadius: 4, zIndex: 10,
   },
   suggestionItem: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    padding: 12, borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
+    padding: 12, borderBottomWidth: 1, borderBottomColor: t.divider,
   },
-  suggestionText: { fontSize: 14, color: '#212121', flex: 1 },
+  suggestionText: { fontSize: 14, color: t.text, flex: 1 },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.52)',
@@ -492,7 +608,7 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   overlayCard: {
-    backgroundColor: '#fff',
+    backgroundColor: t.surface,
     borderRadius: 20,
     paddingVertical: 32,
     paddingHorizontal: 40,
@@ -506,7 +622,7 @@ const styles = StyleSheet.create({
   overlayText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#212121',
+    color: t.text,
     marginTop: 14,
   },
 });
