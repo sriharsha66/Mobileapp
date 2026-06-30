@@ -1,12 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ── Change this to your machine's local IP when testing on a physical device ──
-// iOS Simulator  → localhost works fine
-// Android Emulator → use 10.0.2.2
-// Physical device  → use your machine's WiFi IP e.g. 192.168.1.10
+// ── EXPO GO (expo-app branch) ─────────────────────────────────────
+// Production EC2 backend (works on any network):
 const DEV_HOST = 'medvaultdemo.duckdns.org';
-
 export const API_BASE = `https://${DEV_HOST}`;
+
+// To test with a LOCAL backend instead, comment out the two lines above
+// and uncomment the line below (replace IP with your machine's WiFi IP):
+// export const API_BASE = 'http://192.168.1.XXX:8000';
 
 const TOKEN_KEY = '@medvault_jwt';
 
