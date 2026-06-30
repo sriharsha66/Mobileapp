@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
@@ -37,13 +37,64 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 function AddTabPlaceholder() { return null; }
 
+function WebTopNav({ state, navigation }: BottomTabBarProps) {
+  const { theme } = useTheme();
+  const tabs = [
+    { name: 'HomeTab', label: 'Home', icon: 'home-outline' as const, activeIcon: 'home' as const },
+    { name: 'MyReportsTab', label: 'My Reports', icon: 'folder-open-outline' as const, activeIcon: 'folder-open' as const },
+    { name: 'ProfileTab', label: 'Profile', icon: 'person-circle-outline' as const, activeIcon: 'person-circle' as const },
+  ];
+  return (
+    <View style={{
+      position: 'fixed' as any,
+      top: 0, left: 0, right: 0,
+      height: 56,
+      backgroundColor: '#1565C0',
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 24,
+      justifyContent: 'space-between',
+      zIndex: 1000,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 4,
+    }}>
+      <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800', letterSpacing: 1 }}>🏥 MedVault</Text>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {tabs.map((tab) => {
+          const isFocused = state.routes[state.index].name === tab.name;
+          return (
+            <TouchableOpacity
+              key={tab.name}
+              onPress={() => navigation.navigate(tab.name)}
+              style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: isFocused ? 'rgba(255,255,255,0.2)' : 'transparent', flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            >
+              <Ionicons name={isFocused ? tab.activeIcon : tab.icon} size={18} color="#fff" />
+              <Text style={{ color: '#fff', fontSize: 14, fontWeight: isFocused ? '700' : '500' }}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+        <TouchableOpacity
+          onPress={() => navigation.getParent()?.navigate('Upload', {})}
+          style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: '#FFF', flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 8 }}
+        >
+          <Ionicons name="add-circle-outline" size={18} color="#1565C0" />
+          <Text style={{ color: '#1565C0', fontSize: 14, fontWeight: '700' }}>Add Report</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 function MainTabs() {
   const { theme } = useTheme();
   return (
     <Tab.Navigator
+      tabBar={Platform.OS === 'web' ? (props) => <WebTopNav {...props} /> : undefined}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: {
+        tabBarStyle: Platform.OS === 'web' ? { display: 'none' } : {
           height: 72,
           paddingBottom: 10,
           paddingTop: 4,
@@ -123,10 +174,11 @@ function MainNavigator() {
         headerStyle: { backgroundColor: '#1565C0' },
         headerTintColor: '#fff',
         headerTitleStyle: { fontWeight: '700', fontSize: 17 },
+        ...(Platform.OS === 'web' && { contentStyle: { paddingTop: 56 } }),
       }}
       screenListeners={{ beforeRemove: () => hapticTab() }}
     >
-      <MainStack.Screen name="Tabs" component={MainTabs} options={{ headerShown: false }} />
+      <MainStack.Screen name="Tabs" component={MainTabs} options={{ headerShown: false, ...(Platform.OS === 'web' && { contentStyle: { paddingTop: 0 } }) }} />
       <MainStack.Screen name="Upload" component={UploadScreen} options={{ title: 'Add New Report', headerBackButtonMenuEnabled: false, headerBackTitle: 'Back' }} />
       <MainStack.Screen name="ReportDetail" component={ReportDetailScreen} options={{ title: 'Report Details' }} />
       <MainStack.Screen name="EditReport" component={EditReportScreen} options={{ title: 'Edit Report', headerBackButtonMenuEnabled: false, headerBackTitle: 'Back' }} />

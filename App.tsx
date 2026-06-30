@@ -6,6 +6,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import { BiometricProvider } from './src/context/BiometricContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import WebGlobalStyles from './src/components/WebGlobalStyles';
 import { cancelVisitNotifications } from './src/services/notificationService';
 import { navigationRef, setPendingReportNav } from './src/navigation/navigationRef';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -59,6 +60,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <WebGlobalStyles />
       <ThemeProvider>
         <AuthProvider>
           <BiometricProvider>

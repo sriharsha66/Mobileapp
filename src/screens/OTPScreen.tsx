@@ -88,9 +88,12 @@ export default function OTPScreen({ navigation, route }: Props) {
   const maskedPhone = phone.replace(/(\d{2})\d{6}(\d{2})/, '$1******$2');
   const maskedEmail = email.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + '*'.repeat(Math.min(b.length, 6)) + c);
 
+  const Wrapper = Platform.OS === 'web' ? View : KeyboardAvoidingView;
+  const wrapperProps = Platform.OS === 'web' ? {} : { behavior: Platform.OS === 'ios' ? 'padding' : 'height' as any };
+
   return (
-    <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bounces={false}>
+    <Wrapper style={s.flex} {...wrapperProps}>
+      <ScrollView contentContainerStyle={[s.container, Platform.OS === 'web' && { minHeight: '100vh' as any }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bounces={false}>
 
         {/* OTP code — shown ABOVE the card, full width, impossible to miss */}
         <View style={s.otpCodeBox}>
@@ -144,7 +147,7 @@ export default function OTPScreen({ navigation, route }: Props) {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </Wrapper>
   );
 }
 

@@ -29,10 +29,20 @@ export default function LoginScreen({ navigation }: Props) {
   const [otpSent, setOtpSent] = useState(false);
   const otpRefs = useRef<Array<TextInput | null>>([]);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  function showError(title: string, message: string) {
+    if (Platform.OS === 'web') {
+      setErrorMsg(message);
+    } else {
+      Alert.alert(title, message);
+    }
+  }
 
   async function handleEmailLogin() {
+    setErrorMsg('');
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Missing Fields', 'Please enter your email and password.');
+      showError('Missing Fields', 'Please enter your email and password.');
       return;
     }
     hapticMedium();
@@ -40,38 +50,42 @@ export default function LoginScreen({ navigation }: Props) {
     try {
       await login(email.trim(), password);
     } catch (e: any) {
-      Alert.alert('Login Failed', e.message);
+      showError('Login Failed', e.message);
     } finally {
       setLoading(false);
     }
   }
 
   async function handleSendOTP() {
+    setErrorMsg('');
     const digits = phone.replace(/\D/g, '');
-    if (digits.length < 10) { Alert.alert('Invalid Phone', 'Please enter a valid 10-digit phone number.'); return; }
+    if (digits.length < 10) { showError('Invalid Phone', 'Please enter a valid 10-digit phone number.'); return; }
     setLoading(true);
     try {
       const code = await requestPhoneOTP(phone.trim());
       setSentOtp(code);
       setOtpSent(true);
       setOtp(['', '', '', '', '', '']);
-      Alert.alert('OTP Sent (Demo)', `Your OTP:\n\n${code}\n\n(In production this would be sent via SMS.)`);
+      if (Platform.OS !== 'web') {
+        Alert.alert('OTP Sent (Demo)', `Your OTP:\n\n${code}\n\n(In production this would be sent via SMS.)`);
+      }
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      showError('Error', e.message);
     } finally {
       setLoading(false);
     }
   }
 
   async function handlePhoneLogin() {
+    setErrorMsg('');
     const entered = otp.join('');
-    if (entered.length < 6) { Alert.alert('Incomplete', 'Please enter the 6-digit OTP.'); return; }
+    if (entered.length < 6) { showError('Incomplete', 'Please enter the 6-digit OTP.'); return; }
     hapticMedium();
     setLoading(true);
     try {
       await loginWithPhoneOTP(phone.trim(), entered, sentOtp);
     } catch (e: any) {
-      Alert.alert('Login Failed', e.message);
+      showError('Login Failed', e.message);
     } finally {
       setLoading(false);
     }
@@ -93,9 +107,12 @@ export default function LoginScreen({ navigation }: Props) {
     setOtp(['', '', '', '', '', '']);
   }
 
+  const Wrapper = Platform.OS === 'web' ? View : KeyboardAvoidingView;
+  const wrapperProps = Platform.OS === 'web' ? {} : { behavior: Platform.OS === 'ios' ? 'padding' : undefined as any };
+
   return (
-    <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+    <Wrapper style={s.flex} {...wrapperProps}>
+      <ScrollView contentContainerStyle={[s.container, Platform.OS === 'web' && { minHeight: '100vh' as any }]} keyboardShouldPersistTaps="handled">
         <View style={s.header}>
           <View style={s.logoCircle}>
             <Ionicons name="heart" size={36} color="#fff" />
@@ -116,6 +133,7 @@ export default function LoginScreen({ navigation }: Props) {
         </View>
 
         <View style={s.form}>
+          {errorMsg ? <Text style={s.errorText}>{errorMsg}</Text> : null}
           {activeTab === 'email' ? (
             <>
               <Text style={s.label}>Email</Text>
@@ -155,6 +173,13 @@ export default function LoginScreen({ navigation }: Props) {
                 </TouchableOpacity>
               ) : (
                 <>
+                  {Platform.OS === 'web' && sentOtp ? (
+                    <View style={s.otpInlineBox}>
+                      <Text style={s.otpInlineLabel}>YOUR OTP CODE</Text>
+                      <Text style={s.otpInlineCode}>{sentOtp}</Text>
+                      <Text style={s.otpInlineHint}>Enter this code in the boxes below</Text>
+                    </View>
+                  ) : null}
                   <Text style={[s.label, { marginTop: 18 }]}>Enter OTP</Text>
                   <View style={s.otpRow}>
                     {otp.map((d, i) => (
@@ -185,13 +210,13 @@ export default function LoginScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </Wrapper>
   );
 }
 
 const makeStyles = (t: AppTheme) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: t.bg },
-  container: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  flex: { flex: 1, backgroundColor: Platform.OS === 'web' ? '#EEF2FF' : t.bg },
+  container: { flexGrow: 1, justifyContent: 'center', padding: 24, ...(Platform.OS === 'web' && { maxWidth: 440, marginHorizontal: 'auto' as any, width: '100%', paddingTop: 48, paddingBottom: 48 }) },
   header: { alignItems: 'center', marginBottom: 28 },
   logoCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#1565C0', alignItems: 'center', justifyContent: 'center', marginBottom: 12, elevation: 4, shadowColor: '#1565C0', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
   appName: { fontSize: 28, fontWeight: '700', color: '#1565C0', letterSpacing: 1 },
@@ -219,4 +244,9 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   linkText: { textAlign: 'center', marginTop: 20, color: t.textSecondary, fontSize: 14 },
   link: { color: '#1565C0', fontWeight: '600' },
+  errorText: { color: '#C62828', fontSize: 13, fontWeight: '600', textAlign: 'center', marginBottom: 10 },
+  otpInlineBox: { backgroundColor: '#1B5E20', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 12, marginBottom: 4 },
+  otpInlineLabel: { fontSize: 10, fontWeight: '700', color: '#A5D6A7', letterSpacing: 2, marginBottom: 4, textTransform: 'uppercase' },
+  otpInlineCode: { fontSize: 36, fontWeight: '900', color: '#FFFFFF', letterSpacing: 8 },
+  otpInlineHint: { fontSize: 11, color: '#C8E6C9', marginTop: 4 },
 });

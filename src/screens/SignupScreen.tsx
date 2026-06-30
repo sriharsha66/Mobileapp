@@ -31,6 +31,15 @@ export default function SignupScreen({ navigation }: Props) {
   const [confirm, setConfirm] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  function showError(title: string, message: string) {
+    if (Platform.OS === 'web') {
+      setErrorMsg(message);
+    } else {
+      Alert.alert(title, message);
+    }
+  }
 
   const strength = checkStrength(password);
   const strengthScore = [strength.hasLength, strength.hasNumber, strength.hasSpecial].filter(Boolean).length;
@@ -45,14 +54,15 @@ export default function SignupScreen({ navigation }: Props) {
   const strengthInfo = getStrengthLabel();
 
   async function handleNext() {
-    if (!name.trim()) { Alert.alert('Required', 'Please enter your full name.'); return; }
-    if (!email.trim() || !email.includes('@')) { Alert.alert('Invalid Email', 'Please enter a valid email address.'); return; }
+    setErrorMsg('');
+    if (!name.trim()) { showError('Required', 'Please enter your full name.'); return; }
+    if (!email.trim() || !email.includes('@')) { showError('Invalid Email', 'Please enter a valid email address.'); return; }
     const digits = phone.replace(/\D/g, '');
-    if (digits.length < 10) { Alert.alert('Invalid Phone', 'Please enter a valid 10-digit phone number.'); return; }
-    if (!strength.hasLength) { Alert.alert('Weak Password', 'Password must be at least 6 characters.'); return; }
-    if (!strength.hasNumber) { Alert.alert('Weak Password', 'Password must include at least one number.'); return; }
-    if (!strength.hasSpecial) { Alert.alert('Weak Password', 'Password must include at least one special character (e.g. @, #, !).'); return; }
-    if (password !== confirm) { Alert.alert('Mismatch', 'Passwords do not match.'); return; }
+    if (digits.length < 10) { showError('Invalid Phone', 'Please enter a valid 10-digit phone number.'); return; }
+    if (!strength.hasLength) { showError('Weak Password', 'Password must be at least 6 characters.'); return; }
+    if (!strength.hasNumber) { showError('Weak Password', 'Password must include at least one number.'); return; }
+    if (!strength.hasSpecial) { showError('Weak Password', 'Password must include at least one special character (e.g. @, #, !).'); return; }
+    if (password !== confirm) { showError('Mismatch', 'Passwords do not match.'); return; }
 
     setLoading(true);
     setTimeout(() => {
@@ -61,9 +71,12 @@ export default function SignupScreen({ navigation }: Props) {
     }, 400);
   }
 
+  const Wrapper = Platform.OS === 'web' ? View : KeyboardAvoidingView;
+  const wrapperProps = Platform.OS === 'web' ? {} : { behavior: Platform.OS === 'ios' ? 'padding' : undefined as any };
+
   return (
-    <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+    <Wrapper style={s.flex} {...wrapperProps}>
+      <ScrollView contentContainerStyle={[s.container, Platform.OS === 'web' && { minHeight: '100vh' as any }]} keyboardShouldPersistTaps="handled">
         <View style={s.header}>
           <View style={s.logoCircle}><Text style={s.logoText}>M</Text></View>
           <Text style={s.appName}>Create Account</Text>
@@ -71,6 +84,7 @@ export default function SignupScreen({ navigation }: Props) {
         </View>
 
         <View style={s.form}>
+          {errorMsg ? <Text style={s.errorText}>{errorMsg}</Text> : null}
           <Text style={s.label}>Full Name *</Text>
           <TextInput style={s.input} value={name} onChangeText={setName} placeholder="John Doe" placeholderTextColor={t.textMuted} autoCapitalize="words" />
 
@@ -123,7 +137,7 @@ export default function SignupScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </Wrapper>
   );
 }
 
@@ -137,8 +151,8 @@ function Req({ met, label, t }: { met: boolean; label: string; t: AppTheme }) {
 }
 
 const makeStyles = (t: AppTheme) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: t.bg },
-  container: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  flex: { flex: 1, backgroundColor: Platform.OS === 'web' ? '#EEF2FF' : t.bg },
+  container: { flexGrow: 1, justifyContent: 'center', padding: 24, ...(Platform.OS === 'web' && { maxWidth: 440, marginHorizontal: 'auto' as any, width: '100%', paddingTop: 48, paddingBottom: 48 }) },
   header: { alignItems: 'center', marginBottom: 28 },
   logoCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#1565C0', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   logoText: { color: '#fff', fontSize: 28, fontWeight: '700' },
@@ -161,4 +175,5 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   linkText: { textAlign: 'center', marginTop: 18, color: t.textSecondary, fontSize: 14 },
   link: { color: '#1565C0', fontWeight: '600' },
+  errorText: { color: '#C62828', fontSize: 13, fontWeight: '600', textAlign: 'center', marginBottom: 10 },
 });
