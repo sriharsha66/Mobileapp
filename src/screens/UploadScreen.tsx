@@ -145,16 +145,21 @@ export default function UploadScreen({ navigation }: Props) {
 
   async function pickFromCamera() {
     if (Platform.OS === 'web') {
-      // Web: camera not reliably supported — fall back to gallery file picker
       return pickFromGallery();
     }
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permission needed', 'Camera access is required.'); return; }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images', 'videos'], quality: 0.85, videoMaxDuration: 120 });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      const isVideo = asset.type === 'video';
-      await addFile(asset.uri, asset.fileName || (isVideo ? 'video.mp4' : 'photo.jpg'), isVideo ? 'video' : 'image', isVideo ? 'video/mp4' : 'image/jpeg', asset.fileSize || 0);
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission needed', 'Camera access is required. Go to Settings → Privacy → Camera to enable it.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: 'images' as any, quality: 0.85 });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        await addFile(asset.uri, asset.fileName || 'photo.jpg', 'image', asset.mimeType || 'image/jpeg', asset.fileSize || 0);
+      }
+    } catch (e: any) {
+      Alert.alert('Camera Error', e?.message || 'Could not open camera. Please try again.');
     }
   }
 

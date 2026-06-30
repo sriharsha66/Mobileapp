@@ -172,16 +172,19 @@ export default function EditReportScreen({ navigation, route }: Props) {
     if (Platform.OS === 'web') {
       return pickFromGallery();
     }
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permission needed', 'Camera access is required.'); return; }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images', 'videos'],
-      quality: 0.85,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      const isVideo = asset.type === 'video';
-      await addFile(asset.uri, asset.fileName || (isVideo ? 'video.mp4' : 'photo.jpg'), isVideo ? 'video' : 'image', isVideo ? 'video/mp4' : 'image/jpeg', asset.fileSize || 0);
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission needed', 'Camera access is required. Go to Settings → Privacy → Camera to enable it.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: 'images' as any, quality: 0.85 });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        await addFile(asset.uri, asset.fileName || 'photo.jpg', 'image', asset.mimeType || 'image/jpeg', asset.fileSize || 0);
+      }
+    } catch (e: any) {
+      Alert.alert('Camera Error', e?.message || 'Could not open camera. Please try again.');
     }
   }
 
@@ -227,11 +230,12 @@ export default function EditReportScreen({ navigation, route }: Props) {
 
   async function addFile(uri: string, name: string, type: MedFile['type'], mimeType: string, size: number) {
     try {
-      const serverUri = await copyFileToStorage(user!.id, uri, name);
+      const serverUri = await copyFileToStorage(user!.id, uri, name, mimeType);
       const serverId  = fileIdFromUri(serverUri);
       setFiles((prev) => [...prev, { id: serverId, name, uri: serverUri, type, mimeType, size, createdAt: new Date().toISOString() }]);
-    } catch {
-      Alert.alert('Error', 'Could not upload file.');
+    } catch (e: any) {
+      console.error('Upload error:', e);
+      Alert.alert('Upload failed', e?.message || 'Could not upload file. Please try again.');
     }
   }
 
