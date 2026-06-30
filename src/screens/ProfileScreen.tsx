@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, Image, Modal, StatusBar, Switch,
+  ScrollView, Alert, ActivityIndicator, Image, Modal, StatusBar, Switch, Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -74,6 +74,10 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
   }
 
   function handleLogout() {
+    if (Platform.OS === 'web') {
+      if ((window as any).confirm('Are you sure you want to logout?')) logout();
+      return;
+    }
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Stay', style: 'cancel' },
       { text: 'Logout', style: 'destructive', onPress: logout },
