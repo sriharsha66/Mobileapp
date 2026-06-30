@@ -1,0 +1,15 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "Pre-built dist is already in the repository"
+    build:
+      commands:
+        - echo "No build step needed — serving pre-built Expo web export"
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths: []
