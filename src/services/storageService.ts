@@ -124,8 +124,8 @@ export async function copyFileToStorage(
   });
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({ detail: 'Upload failed' }));
-    throw new Error(err.detail || 'File upload failed');
+    const err = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+    throw new Error(err.detail || `Upload failed (${response.status})`);
   }
 
   const uploaded: ApiFile = await response.json();

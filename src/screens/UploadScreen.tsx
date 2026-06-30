@@ -199,8 +199,9 @@ export default function UploadScreen({ navigation }: Props) {
       const serverUri = await copyFileToStorage(user!.id, uri, name, mimeType);
       const serverId  = fileIdFromUri(serverUri);
       setFiles(prev => [...prev, { id: serverId, name, uri: serverUri, type, mimeType, size, createdAt: new Date().toISOString() }]);
-    } catch {
-      Alert.alert('Error', 'Could not upload file. Please try again.');
+    } catch (e: any) {
+      console.error('Upload error:', e);
+      Alert.alert('Upload failed', e?.message || 'Could not upload file. Please try again.');
     }
   }
 
