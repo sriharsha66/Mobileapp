@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as LegacyFS from 'expo-file-system/legacy';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, AppTheme } from '../context/ThemeContext';
 import { useBiometric } from '../context/BiometricContext';
@@ -46,8 +45,7 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
   const [favIds, setFavIds] = useState<string[]>([]);
   const [starredCount, setStarredCount] = useState(0);
 
-  const { bottom: bottomInset } = useSafeAreaInsets();
-  const s = useMemo(() => makeStyles(t, bottomInset), [t, bottomInset]);
+  const s = useMemo(() => makeStyles(t), [t]);
 
   const loadFavs = useCallback(async () => {
     const [quotesJson, starredJson] = await Promise.all([
@@ -438,7 +436,7 @@ function FieldC({ label, value, onChangeText, keyboardType, t }: {
   );
 }
 
-const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
+const makeStyles = (t: AppTheme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, paddingBottom: 40 },
   avatarSection: { alignItems: 'center', paddingVertical: 28 },
@@ -489,13 +487,13 @@ const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.96)', alignItems: 'center', justifyContent: 'center' },
   modalImage: { width: '100%', height: '75%' },
   modalClose: { position: 'absolute', top: 52, right: 20, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  modalActions: { position: 'absolute', bottom: 60 + bottomInset, flexDirection: 'row', gap: 12 },
+  modalActions: { position: 'absolute', bottom: 60, flexDirection: 'row', gap: 12 },
   modalChangeBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#1565C0', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 12, elevation: 4 },
   modalChangeTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
   modalRemoveBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(239,83,80,0.15)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: '#EF5350' },
   modalRemoveTxt: { color: '#EF5350', fontSize: 15, fontWeight: '700' },
   editModalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  editModalCard: { backgroundColor: t.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36 + bottomInset },
+  editModalCard: { backgroundColor: t.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36 },
   editModalTitle: { fontSize: 17, fontWeight: '700', color: t.text, textAlign: 'center', marginBottom: 16 },
   editModalImg: { width: '100%', height: 240, borderRadius: 16, backgroundColor: t.inputBg, marginBottom: 16 },
   editModalBtns: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 },

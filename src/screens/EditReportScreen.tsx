@@ -20,7 +20,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp, usePreventRemove } from '@react-navigation/native';
 import { MainStackParamList } from '../navigation/types';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, AppTheme } from '../context/ThemeContext';
 import {
@@ -327,8 +326,7 @@ export default function EditReportScreen({ navigation, route }: Props) {
     }
   }
 
-  const { bottom: bottomInset } = useSafeAreaInsets();
-  const styles = makeStyles(t, bottomInset);
+  const styles = makeStyles(t);
   if (!loaded) {
     return <View style={styles.loading}><ActivityIndicator size="large" color="#1565C0" /></View>;
   }
@@ -597,7 +595,7 @@ function formatSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
+const makeStyles = (t: AppTheme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, paddingBottom: 24 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -697,10 +695,9 @@ const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
     backgroundColor: t.surface,
     borderTopWidth: 1,
     borderTopColor: t.border,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: Math.max(bottomInset, Platform.OS === 'ios' ? 28 : 0) + 12,
+    padding: 16,
     elevation: 8,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
   },
   suggestionBox: {
     backgroundColor: t.surface, borderRadius: 10, borderWidth: 1,

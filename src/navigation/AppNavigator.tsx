@@ -3,7 +3,6 @@ import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
@@ -41,15 +40,13 @@ function AddTabPlaceholder() { return null; }
 
 function MainTabs() {
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = 56 + insets.bottom;
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          height: tabBarHeight,
-          paddingBottom: insets.bottom + 4,
+          height: 72,
+          paddingBottom: 10,
           paddingTop: 4,
           backgroundColor: theme.tabBg,
           borderTopColor: theme.tabBorder,

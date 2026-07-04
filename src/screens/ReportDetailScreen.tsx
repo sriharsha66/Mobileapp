@@ -27,7 +27,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { MainStackParamList } from '../navigation/types';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, AppTheme } from '../context/ThemeContext';
 import { getReports, deleteReport } from '../services/storageService';
@@ -416,8 +415,7 @@ ${filesHtml}
     ]);
   }
 
-  const { bottom: bottomInset } = useSafeAreaInsets();
-  const styles = makeStyles(t, bottomInset);
+  const styles = makeStyles(t);
   if (!report) {
     return (
       <View style={styles.notFound}>
@@ -722,7 +720,7 @@ function fileEmoji(type: MedFile['type']): string {
   }
 }
 
-const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
+const makeStyles = (t: AppTheme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, paddingBottom: 40 },
   notFound: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -780,16 +778,16 @@ const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
   zoomWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   zoomContainer: { width: W, height: H * 0.78, alignItems: 'center', justifyContent: 'center' },
   previewImage: { width: W, height: H * 0.78 },
-  zoomHint: { position: 'absolute', bottom: 80 + bottomInset, color: 'rgba(255,255,255,0.4)', fontSize: 11 },
+  zoomHint: { position: 'absolute', bottom: 80, color: 'rgba(255,255,255,0.4)', fontSize: 11 },
   previewCounter: { position: 'absolute', top: 56, alignSelf: 'center', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '700', zIndex: 10, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14 },
-  previewFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 36 + bottomInset, backgroundColor: 'rgba(0,0,0,0.6)' },
+  previewFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 36, backgroundColor: 'rgba(0,0,0,0.6)' },
   previewName: { flex: 1, color: '#ccc', fontSize: 12, marginRight: 16 },
-  previewDots: { position: 'absolute', bottom: 82 + bottomInset, alignSelf: 'center', flexDirection: 'row', gap: 6, zIndex: 10 },
+  previewDots: { position: 'absolute', bottom: 82, alignSelf: 'center', flexDirection: 'row', gap: 6, zIndex: 10 },
   previewDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.35)' },
   previewDotActive: { backgroundColor: '#fff', width: 18, borderRadius: 3 },
   sharingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
   sharingBox: { backgroundColor: t.surface, borderRadius: 20, padding: 32, alignItems: 'center', gap: 16, elevation: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.22, shadowRadius: 12 },
   sharingText: { color: t.text, fontSize: 15, fontWeight: '600' },
-  shareToast: { position: 'absolute', bottom: 32 + bottomInset, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2E7D32', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 28, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 8 },
+  shareToast: { position: 'absolute', bottom: 32, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2E7D32', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 28, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 8 },
   shareToastTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp, usePreventRemove } from '@react-navigation/native';
 import { MainStackParamList } from '../navigation/types';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, AppTheme } from '../context/ThemeContext';
 import { saveReport, copyFileToStorage, generateId, buildReportTitle, getReports, fileIdFromUri } from '../services/storageService';
@@ -290,8 +289,7 @@ export default function UploadScreen({ navigation }: Props) {
     }
   }
 
-  const { bottom: bottomInset } = useSafeAreaInsets();
-  const styles = makeStyles(t, bottomInset);
+  const styles = makeStyles(t);
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -691,7 +689,7 @@ function formatSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
+const makeStyles = (t: AppTheme) => StyleSheet.create({
   flex: { flex: 1, backgroundColor: t.bg },
   container: { flex: 1 },
   content: { padding: 16, paddingBottom: 24 },
@@ -832,8 +830,8 @@ const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
   },
   uploadToastText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   stickyFooter: {
-    backgroundColor: t.surface, paddingHorizontal: 16, paddingTop: 12,
-    paddingBottom: Math.max(bottomInset, Platform.OS === 'ios' ? 28 : 0) + 12,
+    backgroundColor: t.surface, paddingHorizontal: 16, paddingVertical: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
     borderTopWidth: 1, borderTopColor: t.border,
     elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.08, shadowRadius: 4,
   },
