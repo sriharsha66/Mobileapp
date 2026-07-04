@@ -93,16 +93,11 @@ function MainTabs() {
           },
         })}
         options={{
-          tabBarButton: (props) => (
-            <TouchableOpacity
-              onPress={props.onPress}
-              activeOpacity={0.85}
-              style={[props.style, tabStyles.addTabItem]}
-            >
-              <Ionicons name="add-circle-outline" size={24} color={theme.textMuted} />
-              <Text style={[tabStyles.addLabel, { color: theme.textMuted }]}>Add</Text>
-            </TouchableOpacity>
+          tabBarLabel: 'Add',
+          tabBarIcon: () => (
+            <Ionicons name="add-circle-outline" size={24} color={theme.textMuted} />
           ),
+          tabBarActiveTintColor: theme.textMuted,
         }}
       />
       <Tab.Screen
@@ -286,5 +281,4 @@ export default function AppNavigator() {
 
 const tabStyles = StyleSheet.create({
   addTabItem: { alignItems: 'center', justifyContent: 'center' },
-  addLabel: { fontSize: 10, fontWeight: '600', color: '#9E9E9E', marginTop: 2 },
 });
