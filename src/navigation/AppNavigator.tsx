@@ -3,6 +3,7 @@ import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
@@ -30,6 +31,7 @@ import FileViewerScreen from '../screens/FileViewerScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import SavedQuotesScreen from '../screens/SavedQuotesScreen';
 import StarredReportsScreen from '../screens/StarredReportsScreen';
+import LegalScreen from '../screens/LegalScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const MainStack = createNativeStackNavigator<MainStackParamList>();
@@ -39,13 +41,15 @@ function AddTabPlaceholder() { return null; }
 
 function MainTabs() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 56 + insets.bottom;
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          height: 72,
-          paddingBottom: 10,
+          height: tabBarHeight,
+          paddingBottom: insets.bottom + 4,
           paddingTop: 4,
           backgroundColor: theme.tabBg,
           borderTopColor: theme.tabBorder,
@@ -137,6 +141,11 @@ function MainNavigator() {
       />
       <MainStack.Screen name="SavedQuotes" component={SavedQuotesScreen} options={{ title: 'Saved Quotes' }} />
       <MainStack.Screen name="StarredReports" component={StarredReportsScreen} options={{ title: 'Starred Reports' }} />
+      <MainStack.Screen
+        name="Legal"
+        component={LegalScreen}
+        options={({ route }) => ({ title: route.params.type === 'terms' ? 'Terms & Conditions' : 'Privacy Policy' })}
+      />
     </MainStack.Navigator>
   );
 }

@@ -277,7 +277,15 @@ export default function WelcomeScreen({ onDone, isFirstLogin }: Props) {
         </Animated.View>
       </Pressable>
 
-      <Text style={s.tapHint}>{tapHint}</Text>
+      <Text style={s.tapHint}>or tap your avatar above</Text>
+
+      {/* ── Bold Enter button — always visible ── */}
+      {!isFirstLogin && (
+        <TouchableOpacity style={s.enterBtn} onPress={handleAvatarTap} activeOpacity={0.85}>
+          <Text style={s.enterBtnText}>Enter MedVault</Text>
+          <Ionicons name="arrow-forward-circle" size={24} color="#fff" />
+        </TouchableOpacity>
+      )}
 
       {/* ── First login only: avatar picker ── */}
       {isFirstLogin && (
@@ -328,6 +336,11 @@ export default function WelcomeScreen({ onDone, isFirstLogin }: Props) {
               </TouchableOpacity>
             ) : null}
           </View>
+
+          <TouchableOpacity style={[s.enterBtn, { marginTop: 28 }]} onPress={handleAvatarTap} activeOpacity={0.85}>
+            <Text style={s.enterBtnText}>{photoUri || selectedPreset ? 'Get Started' : 'Skip & Enter'}</Text>
+            <Ionicons name="arrow-forward-circle" size={24} color="#fff" />
+          </TouchableOpacity>
         </>
       )}
     </ScrollView>
@@ -377,7 +390,14 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
   editModalCancelTxt: { fontSize: 15, fontWeight: '600', color: t.textSecondary },
   editModalConfirm: { flex: 2, flexDirection: 'row', backgroundColor: '#1565C0', borderRadius: 14, padding: 13, alignItems: 'center', justifyContent: 'center', gap: 6 },
   editModalConfirmTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  tapHint: { textAlign: 'center', fontSize: 13, color: '#1565C0', fontWeight: '600', marginBottom: 32, letterSpacing: 0.3 },
+  tapHint: { textAlign: 'center', fontSize: 12, color: t.textMuted, marginBottom: 20, letterSpacing: 0.3 },
+  enterBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: '#1565C0', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 32,
+    marginBottom: 24, elevation: 4,
+    shadowColor: '#1565C0', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10,
+  },
+  enterBtnText: { fontSize: 17, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
 
   sectionLabel: { fontSize: 13, fontWeight: '700', color: t.text, marginBottom: 12, letterSpacing: 0.4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24, justifyContent: 'center' },

@@ -201,7 +201,7 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
   tabBtnActive: { backgroundColor: t.surface, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4 },
   tabBtnText: { fontSize: 13, fontWeight: '600', color: t.textMuted },
   tabBtnTextActive: { color: '#1565C0' },
-  form: { backgroundColor: t.surface, borderRadius: 16, padding: 24, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 },
+  form: { backgroundColor: t.surface, borderRadius: 16, padding: 24, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, minHeight: 360 },
   label: { fontSize: 14, fontWeight: '600', color: t.text, marginBottom: 6, marginTop: 12 },
   input: { borderWidth: 1.5, borderColor: t.border, borderRadius: 10, padding: 12, fontSize: 15, color: t.text, backgroundColor: t.inputBg },
   pwdRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: t.border, borderRadius: 10, backgroundColor: t.inputBg },

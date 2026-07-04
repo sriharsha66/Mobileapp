@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp, usePreventRemove } from '@react-navigation/native';
 import { MainStackParamList } from '../navigation/types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, AppTheme } from '../context/ThemeContext';
 import {
@@ -95,6 +96,10 @@ export default function EditReportScreen({ navigation, route }: Props) {
   const [typePickerOpen, setTypePickerOpen] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const checkmarkScale = useRef(new Animated.Value(0)).current;
+  const [toastMsg, setToastMsg] = useState('');
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
   const hospitalRef = useRef<TextInput>(null);
@@ -119,6 +124,18 @@ export default function EditReportScreen({ navigation, route }: Props) {
       ]
     );
   });
+
+  function showUploadToast(msg: string) {
+    hapticSuccess();
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToastMsg(msg);
+    setToastVisible(true);
+    toastAnim.setValue(0);
+    Animated.spring(toastAnim, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }).start();
+    toastTimer.current = setTimeout(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => setToastVisible(false));
+    }, 2200);
+  }
 
   async function lookupPincode(pin: string) {
     setPincodeLoading(true);
@@ -233,6 +250,8 @@ export default function EditReportScreen({ navigation, route }: Props) {
       const serverUri = await copyFileToStorage(user!.id, uri, name, mimeType);
       const serverId  = fileIdFromUri(serverUri);
       setFiles((prev) => [...prev, { id: serverId, name, uri: serverUri, type, mimeType, size, createdAt: new Date().toISOString() }]);
+      const label = type === 'image' ? 'Image uploaded successfully' : type === 'video' ? 'Video uploaded successfully' : 'Document uploaded successfully';
+      showUploadToast(label);
     } catch (e: any) {
       console.error('Upload error:', e);
       Alert.alert('Upload failed', e?.message || 'Could not upload file. Please try again.');
@@ -242,19 +261,30 @@ export default function EditReportScreen({ navigation, route }: Props) {
   function removeFile(id: string) {
     const fileToRemove = files.find((f) => f.id === id);
     if (!fileToRemove) return;
-
-    const mediaFiles = files.filter((f) => f.type === 'image' || f.type === 'video');
-    const isMedia = fileToRemove.type === 'image' || fileToRemove.type === 'video';
-
-    if (isMedia && mediaFiles.length <= 1) {
-      Alert.alert('Cannot Remove', 'At least one image or video must remain in the report.');
-      return;
-    }
-    if (files.length <= 1) {
-      Alert.alert('Cannot Remove', 'At least one file must remain in the report.');
-      return;
-    }
-    setFiles((prev) => prev.filter((f) => f.id !== id));
+    Alert.alert(
+      'Remove file?',
+      `Remove "${fileToRemove.name}" from this report?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            const mediaFiles = files.filter((f) => f.type === 'image' || f.type === 'video');
+            const isMedia = fileToRemove.type === 'image' || fileToRemove.type === 'video';
+            if (isMedia && mediaFiles.length <= 1) {
+              Alert.alert('Cannot Remove', 'At least one image or video must remain in the report.');
+              return;
+            }
+            if (files.length <= 1) {
+              Alert.alert('Cannot Remove', 'At least one file must remain in the report.');
+              return;
+            }
+            setFiles((prev) => prev.filter((f) => f.id !== id));
+          },
+        },
+      ]
+    );
   }
 
   async function handleSave() {
@@ -297,7 +327,8 @@ export default function EditReportScreen({ navigation, route }: Props) {
     }
   }
 
-  const styles = makeStyles(t);
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const styles = makeStyles(t, bottomInset);
   if (!loaded) {
     return <View style={styles.loading}><ActivityIndicator size="large" color="#1565C0" /></View>;
   }
@@ -455,27 +486,55 @@ export default function EditReportScreen({ navigation, route }: Props) {
         }}
       />
 
-      <SectionLabel title={`Files (${files.length}) — hold ✕ to remove`} />
+      <SectionLabel title={`Files & Photos (${files.length})`} />
       <View style={styles.fileActions}>
         <TouchableOpacity style={styles.fileBtn} onPress={pickFromCamera}><Ionicons name="camera" size={24} color="#1565C0" /><Text style={styles.fileBtnText}>Camera</Text></TouchableOpacity>
         <TouchableOpacity style={styles.fileBtn} onPress={pickFromGallery}><Ionicons name="images" size={24} color="#1565C0" /><Text style={styles.fileBtnText}>Gallery</Text></TouchableOpacity>
         <TouchableOpacity style={styles.fileBtn} onPress={pickDocument}><Ionicons name="document" size={24} color="#1565C0" /><Text style={styles.fileBtnText}>Document</Text></TouchableOpacity>
       </View>
 
-      <View style={styles.fileList}>
-        {files.map((f) => (
-          <View key={f.id} style={styles.fileItem}>
-            {f.type === 'image'
-              ? <Image source={{ uri: f.uri }} style={styles.fileThumb} />
-              : <View style={styles.fileIconBox}><Text style={{ fontSize: 22 }}>{fileEmoji(f.type)}</Text></View>
-            }
-            <Text style={styles.fileName} numberOfLines={2}>{f.name}</Text>
-            <TouchableOpacity onPress={() => removeFile(f.id)} style={styles.removeBtn}>
-              <Ionicons name="close-circle" size={22} color="#EF5350" />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </View>
+      {files.filter(f => f.type === 'image').length > 0 && (
+        <View style={{ marginBottom: 10 }}>
+          <Text style={styles.fileGroupLabel}>Images ({files.filter(f => f.type === 'image').length})</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScroll}>
+            {files.filter(f => f.type === 'image').map(f => (
+              <View key={f.id} style={styles.imageCard}>
+                <Image source={{ uri: f.uri }} style={styles.imageCardThumb} />
+                <View style={styles.imageCardCheckBadge}>
+                  <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
+                </View>
+                <TouchableOpacity onPress={() => removeFile(f.id)} style={styles.imageCardDelete}>
+                  <Ionicons name="trash-outline" size={16} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.imageCardName} numberOfLines={1}>{f.name}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {files.filter(f => f.type !== 'image').length > 0 && (
+        <View style={styles.docList}>
+          <Text style={styles.fileGroupLabel}>Documents ({files.filter(f => f.type !== 'image').length})</Text>
+          {files.filter(f => f.type !== 'image').map(f => (
+            <View key={f.id} style={styles.docItem}>
+              <View style={styles.docIconBox}>
+                <Text style={styles.docIconEmoji}>{fileEmoji(f.type)}</Text>
+                <View style={styles.docCheckBadge}>
+                  <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+                </View>
+              </View>
+              <View style={styles.docInfo}>
+                <Text style={styles.docName} numberOfLines={2}>{f.name}</Text>
+                <Text style={styles.docMeta}>{f.type.toUpperCase()} · {formatSize(f.size)}</Text>
+              </View>
+              <TouchableOpacity onPress={() => removeFile(f.id)} style={styles.docDeleteBtn}>
+                <Ionicons name="trash-outline" size={20} color="#EF5350" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
 
     </ScrollView>
     <View style={styles.stickyFooter}>
@@ -499,6 +558,19 @@ export default function EditReportScreen({ navigation, route }: Props) {
         )}
       </View>
     )}
+
+    {toastVisible && (
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.uploadToast, {
+          opacity: toastAnim,
+          transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+        }]}
+      >
+        <Ionicons name="checkmark-circle" size={20} color="#fff" />
+        <Text style={styles.uploadToastText}>{toastMsg}</Text>
+      </Animated.View>
+    )}
     </KeyboardAvoidingView>
   );
 }
@@ -518,7 +590,14 @@ function fileEmoji(type: MedFile['type']): string {
   }
 }
 
-const makeStyles = (t: AppTheme) => StyleSheet.create({
+function formatSize(bytes: number): string {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, paddingBottom: 24 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -573,15 +652,44 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
     backgroundColor: '#E8F5E9', borderRadius: 8, padding: 10, marginTop: 6,
   },
   pincodeHintText: { flex: 1, fontSize: 13, color: '#2E7D32' },
-  fileActions: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  fileActions: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   fileBtn: { flex: 1, backgroundColor: t.surface, borderRadius: 12, borderWidth: 1.5, borderColor: t.border, borderStyle: 'dashed', alignItems: 'center', paddingVertical: 12, gap: 4 },
   fileBtnText: { fontSize: 12, color: '#1565C0', fontWeight: '600' },
-  fileList: { gap: 8 },
-  fileItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.surface, borderRadius: 10, padding: 10, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
-  fileThumb: { width: 44, height: 44, borderRadius: 6, marginRight: 10 },
-  fileIconBox: { width: 44, height: 44, borderRadius: 6, backgroundColor: t.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  fileName: { flex: 1, fontSize: 13, color: t.text },
-  removeBtn: { padding: 4 },
+  fileGroupLabel: { fontSize: 11, fontWeight: '700', color: t.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 8 },
+  imageScroll: { marginHorizontal: -4 },
+  imageCard: { width: 100, marginHorizontal: 4, marginBottom: 4, position: 'relative' as const },
+  imageCardThumb: { width: 100, height: 100, borderRadius: 10, backgroundColor: t.inputBg },
+  imageCardCheckBadge: { position: 'absolute' as const, top: 5, left: 5, backgroundColor: '#fff', borderRadius: 10 },
+  imageCardDelete: { position: 'absolute' as const, top: 5, right: 5, backgroundColor: 'rgba(239,83,80,0.85)', borderRadius: 8, padding: 4 },
+  imageCardName: { fontSize: 10, color: t.textMuted, marginTop: 4, textAlign: 'center' as const },
+  docList: { gap: 8 },
+  docItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: t.surface, borderRadius: 12, padding: 10, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+  docIconBox: { width: 44, height: 44, borderRadius: 8, backgroundColor: t.primaryLight, alignItems: 'center', justifyContent: 'center', marginRight: 10, position: 'relative' as const },
+  docIconEmoji: { fontSize: 22 },
+  docCheckBadge: { position: 'absolute' as const, bottom: -2, right: -2, backgroundColor: '#fff', borderRadius: 8 },
+  docInfo: { flex: 1 },
+  docName: { fontSize: 13, fontWeight: '600', color: t.text },
+  docMeta: { fontSize: 11, color: t.textMuted, marginTop: 2 },
+  docDeleteBtn: { padding: 6 },
+  uploadToast: {
+    position: 'absolute' as const,
+    bottom: 88,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#2E7D32',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 28,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    zIndex: 100,
+  },
+  uploadToastText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   saveBtn: { backgroundColor: '#1565C0', borderRadius: 12, padding: 15, alignItems: 'center', elevation: 3 },
   saveBtnDisabled: { opacity: 0.7 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
@@ -589,9 +697,10 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
     backgroundColor: t.surface,
     borderTopWidth: 1,
     borderTopColor: t.border,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Math.max(bottomInset, Platform.OS === 'ios' ? 28 : 0) + 12,
     elevation: 8,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
   },
   suggestionBox: {
     backgroundColor: t.surface, borderRadius: 10, borderWidth: 1,

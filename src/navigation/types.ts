@@ -14,6 +14,7 @@ export type MainStackParamList = {
   FileViewer: { fileUri: string; fileType: string; fileName: string };
   SavedQuotes: undefined;
   StarredReports: undefined;
+  Legal: { type: 'terms' | 'privacy' };
 };
 
 export type TabParamList = {

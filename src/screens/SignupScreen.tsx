@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert, Modal, StatusBar,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, AppTheme } from '../context/ThemeContext';
+import { TERMS, PRIVACY, LegalDoc, LegalBlock } from '../constants/legal';
 
 type Props = { navigation: NativeStackNavigationProp<AuthStackParamList, 'Signup'> };
 
@@ -31,6 +32,8 @@ export default function SignupScreen({ navigation }: Props) {
   const [confirm, setConfirm] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [tcAccepted, setTcAccepted] = useState(false);
+  const [legalModal, setLegalModal] = useState<'terms' | 'privacy' | null>(null);
 
   const strength = checkStrength(password);
   const strengthScore = [strength.hasLength, strength.hasNumber, strength.hasSpecial].filter(Boolean).length;
@@ -53,6 +56,7 @@ export default function SignupScreen({ navigation }: Props) {
     if (!strength.hasNumber) { Alert.alert('Weak Password', 'Password must include at least one number.'); return; }
     if (!strength.hasSpecial) { Alert.alert('Weak Password', 'Password must include at least one special character (e.g. @, #, !).'); return; }
     if (password !== confirm) { Alert.alert('Mismatch', 'Passwords do not match.'); return; }
+    if (!tcAccepted) { Alert.alert('Required', 'Please accept the Terms & Conditions and Privacy Policy to continue.'); return; }
 
     setLoading(true);
     setTimeout(() => {
@@ -61,8 +65,36 @@ export default function SignupScreen({ navigation }: Props) {
     }, 400);
   }
 
+  const legalDoc: LegalDoc | null = legalModal === 'terms' ? TERMS : legalModal === 'privacy' ? PRIVACY : null;
+
   return (
     <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Inline legal document modal */}
+      <Modal visible={!!legalModal} animationType="slide" onRequestClose={() => setLegalModal(null)}>
+        <StatusBar barStyle="light-content" backgroundColor="#1565C0" />
+        <View style={s.legalModal}>
+          <View style={s.legalHeader}>
+            <TouchableOpacity onPress={() => setLegalModal(null)} style={s.legalCloseBtn}>
+              <Ionicons name="close" size={22} color="#fff" />
+            </TouchableOpacity>
+            <Text style={s.legalHeaderTitle}>{legalDoc?.title}</Text>
+            <Text style={s.legalHeaderDate}>Last updated: {legalDoc?.lastUpdated}</Text>
+          </View>
+          <ScrollView style={s.legalScroll} contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
+            {legalDoc?.blocks.map((block, i) => <LegalBlockInline key={i} block={block} t={t} s={s} />)}
+          </ScrollView>
+          <View style={s.legalFooter}>
+            <TouchableOpacity
+              style={s.legalAcceptBtn}
+              onPress={() => { setTcAccepted(true); setLegalModal(null); }}
+            >
+              <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              <Text style={s.legalAcceptText}>Accept & Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
         <View style={s.header}>
           <View style={s.logoCircle}><Text style={s.logoText}>M</Text></View>
@@ -114,7 +146,20 @@ export default function SignupScreen({ navigation }: Props) {
             <Text style={s.infoText}>📱 An OTP will be sent to your phone number to verify your account.</Text>
           </View>
 
-          <TouchableOpacity style={[s.button, loading && s.buttonDisabled]} onPress={handleNext} disabled={loading}>
+          {/* T&C Checkbox */}
+          <TouchableOpacity style={s.tcRow} onPress={() => setTcAccepted(v => !v)} activeOpacity={0.7}>
+            <View style={[s.checkbox, tcAccepted && s.checkboxChecked]}>
+              {tcAccepted && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </View>
+            <Text style={s.tcText}>
+              I have read and agree to the{' '}
+              <Text style={s.tcLink} onPress={() => setLegalModal('terms')}>Terms & Conditions</Text>
+              {' '}and{' '}
+              <Text style={s.tcLink} onPress={() => setLegalModal('privacy')}>Privacy Policy</Text>
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[s.button, (!tcAccepted || loading) && s.buttonDisabled]} onPress={handleNext} disabled={loading || !tcAccepted}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Send OTP →</Text>}
           </TouchableOpacity>
 
@@ -125,6 +170,30 @@ export default function SignupScreen({ navigation }: Props) {
       </ScrollView>
     </KeyboardAvoidingView>
   );
+}
+
+function LegalBlockInline({ block, t, s }: { block: LegalBlock; t: AppTheme; s: ReturnType<typeof makeStyles> }) {
+  switch (block.kind) {
+    case 'heading':
+      return <Text style={s.legalHeading}>{block.text}</Text>;
+    case 'subhead':
+      return <Text style={s.legalSubhead}>{block.text}</Text>;
+    case 'para':
+      return <Text style={s.legalPara}>{block.text}</Text>;
+    case 'bullet':
+      return (
+        <View style={{ flexDirection: 'row', marginBottom: 4, paddingLeft: 4 }}>
+          <Text style={{ color: '#1565C0', marginRight: 8, lineHeight: 20, fontWeight: '700' }}>•</Text>
+          <Text style={[s.legalPara, { flex: 1, marginBottom: 0 }]}>{block.text}</Text>
+        </View>
+      );
+    case 'warning':
+      return <View style={s.legalWarning}><Text style={s.legalWarningText}>{block.text}</Text></View>;
+    case 'divider':
+      return <View style={{ height: 1, backgroundColor: t.divider, marginVertical: 14 }} />;
+    default:
+      return null;
+  }
 }
 
 function Req({ met, label, t }: { met: boolean; label: string; t: AppTheme }) {
@@ -161,4 +230,41 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   linkText: { textAlign: 'center', marginTop: 18, color: t.textSecondary, fontSize: 14 },
   link: { color: '#1565C0', fontWeight: '600' },
+
+  // T&C checkbox
+  tcRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 16, marginBottom: 4, gap: 10 },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: t.border,
+    alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0,
+  },
+  checkboxChecked: { backgroundColor: '#1565C0', borderColor: '#1565C0' },
+  tcText: { flex: 1, fontSize: 13, color: t.textSecondary, lineHeight: 20 },
+  tcLink: { color: '#1565C0', fontWeight: '700', textDecorationLine: 'underline' },
+
+  // Legal modal
+  legalModal: { flex: 1, backgroundColor: t.bg },
+  legalHeader: {
+    backgroundColor: '#1565C0', paddingTop: 52, paddingBottom: 20,
+    paddingHorizontal: 20, flexDirection: 'column',
+  },
+  legalCloseBtn: {
+    position: 'absolute', top: 52, right: 18,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  legalHeaderTitle: { fontSize: 20, fontWeight: '800', color: '#fff', marginBottom: 4 },
+  legalHeaderDate: { fontSize: 12, color: 'rgba(255,255,255,0.65)', fontStyle: 'italic' },
+  legalScroll: { flex: 1 },
+  legalHeading: { fontSize: 14, fontWeight: '800', color: '#1565C0', marginTop: 4, marginBottom: 6 },
+  legalSubhead: { fontSize: 13, fontWeight: '700', color: t.text, marginTop: 8, marginBottom: 4 },
+  legalPara: { fontSize: 13, color: t.text, lineHeight: 20, marginBottom: 6 },
+  legalWarning: { backgroundColor: '#FFF3E0', borderLeftWidth: 4, borderLeftColor: '#FB8C00', borderRadius: 8, padding: 12, marginVertical: 8 },
+  legalWarningText: { fontSize: 13, color: '#E65100', fontWeight: '600', lineHeight: 19 },
+  legalFooter: { padding: 16, paddingBottom: 32, borderTopWidth: 1, borderTopColor: t.divider, backgroundColor: t.surface },
+  legalAcceptBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#1565C0', borderRadius: 12, paddingVertical: 14,
+  },
+  legalAcceptText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

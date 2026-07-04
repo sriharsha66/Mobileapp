@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   Image,
   TouchableOpacity,
   Alert,
@@ -26,6 +27,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { MainStackParamList } from '../navigation/types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, AppTheme } from '../context/ThemeContext';
 import { getReports, deleteReport } from '../services/storageService';
@@ -46,7 +48,15 @@ export default function ReportDetailScreen({ navigation, route }: Props) {
   const { reportId } = route.params;
   const [report, setReport] = useState<MedReport | null>(null);
   const [previewFile, setPreviewFile] = useState<MedFile | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const previewListRef = useRef<FlatList<MedFile>>(null);
   const [sharingLoading, setSharingLoading] = useState(false);
+
+  const onPreviewViewable = useRef(({ viewableItems }: { viewableItems: any[] }) => {
+    if (viewableItems.length > 0 && viewableItems[0].index != null) {
+      setPreviewIndex(viewableItems[0].index);
+    }
+  }).current;
   const [sharedToast, setSharedToast] = useState(false);
   const toastAnim = useRef(new Animated.Value(0)).current;
 
@@ -185,7 +195,7 @@ ${pages.join('\n')}`;
               return `
 <div class="pdf-block">
   <div class="pdf-block-hdr"><span>📄 ${f.name}</span><span class="pdf-block-meta">${size}</span></div>
-  <object data="data:application/pdf;base64,${b64}" type="application/pdf" width="100%" height="1050px" style="border:none;display:block;"></object>
+  <iframe src="data:application/pdf;base64,${b64}" width="100%" height="1050px" style="border:none;display:block;" frameborder="0"></iframe>
 </div>`;
             } catch {
               return `
@@ -406,7 +416,8 @@ ${filesHtml}
     ]);
   }
 
-  const styles = makeStyles(t);
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const styles = makeStyles(t, bottomInset);
   if (!report) {
     return (
       <View style={styles.notFound}>
@@ -467,10 +478,10 @@ ${filesHtml}
         {imageFiles.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Images ({imageFiles.length})</Text>
-            <Text style={styles.sectionHint}>Tap to view · Pinch to zoom · Double-tap to reset</Text>
+            <Text style={styles.sectionHint}>Tap to view · Swipe to browse · Pinch to zoom</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbRow}>
-              {imageFiles.map((f) => (
-                <TouchableOpacity key={f.id} onPress={() => setPreviewFile(f)} activeOpacity={0.85}>
+              {imageFiles.map((f, idx) => (
+                <TouchableOpacity key={f.id} onPress={() => { setPreviewIndex(idx); setPreviewFile(f); }} activeOpacity={0.85}>
                   <Image source={{ uri: f.uri }} style={styles.thumbnail} />
                 </TouchableOpacity>
               ))}
@@ -520,26 +531,52 @@ ${filesHtml}
         )}
       </ScrollView>
 
-      {/* Full-screen image preview with pinch-to-zoom */}
+      {/* Full-screen image preview — swipe left/right between images */}
       <Modal visible={!!previewFile && previewFile.type === 'image'} transparent animationType="fade" onRequestClose={() => setPreviewFile(null)}>
         <View style={styles.previewOverlay}>
           <StatusBar hidden />
           <TouchableOpacity style={styles.previewClose} onPress={() => setPreviewFile(null)}>
             <Ionicons name="close" size={26} color="#fff" />
           </TouchableOpacity>
-          {previewFile && (
-            <>
-              <ZoomableImage uri={previewFile.uri} />
-              <View style={styles.previewFooter}>
-                <Text style={styles.previewName} numberOfLines={1}>{previewFile.name}</Text>
-                <TouchableOpacity
-                  onPress={() => shareFile(previewFile)}
-                  disabled={sharingLoading}
-                >
-                  <Ionicons name="share-outline" size={22} color="#fff" />
-                </TouchableOpacity>
+
+          {imageFiles.length > 1 && (
+            <Text style={styles.previewCounter}>{previewIndex + 1} / {imageFiles.length}</Text>
+          )}
+
+          <FlatList
+            ref={previewListRef}
+            data={imageFiles}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            initialScrollIndex={previewIndex}
+            getItemLayout={(_, index) => ({ length: W, offset: W * index, index })}
+            onViewableItemsChanged={onPreviewViewable}
+            viewabilityConfig={{ viewAreaCoveragePercentThreshold: 50 }}
+            renderItem={({ item }) => (
+              <View style={{ width: W, flex: 1 }}>
+                <ZoomableImage uri={item.uri} />
               </View>
-            </>
+            )}
+          />
+
+          <View style={styles.previewFooter}>
+            <Text style={styles.previewName} numberOfLines={1}>{imageFiles[previewIndex]?.name ?? ''}</Text>
+            <TouchableOpacity
+              onPress={() => imageFiles[previewIndex] && shareFile(imageFiles[previewIndex])}
+              disabled={sharingLoading}
+            >
+              <Ionicons name="share-outline" size={22} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          {imageFiles.length > 1 && (
+            <View style={styles.previewDots}>
+              {imageFiles.map((_, i) => (
+                <View key={i} style={[styles.previewDot, i === previewIndex && styles.previewDotActive]} />
+              ))}
+            </View>
           )}
         </View>
       </Modal>
@@ -685,7 +722,7 @@ function fileEmoji(type: MedFile['type']): string {
   }
 }
 
-const makeStyles = (t: AppTheme) => StyleSheet.create({
+const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, paddingBottom: 40 },
   notFound: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -743,12 +780,16 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
   zoomWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   zoomContainer: { width: W, height: H * 0.78, alignItems: 'center', justifyContent: 'center' },
   previewImage: { width: W, height: H * 0.78 },
-  zoomHint: { position: 'absolute', bottom: 80, color: 'rgba(255,255,255,0.4)', fontSize: 11 },
-  previewFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 36, backgroundColor: 'rgba(0,0,0,0.6)' },
+  zoomHint: { position: 'absolute', bottom: 80 + bottomInset, color: 'rgba(255,255,255,0.4)', fontSize: 11 },
+  previewCounter: { position: 'absolute', top: 56, alignSelf: 'center', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '700', zIndex: 10, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14 },
+  previewFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingBottom: 36 + bottomInset, backgroundColor: 'rgba(0,0,0,0.6)' },
   previewName: { flex: 1, color: '#ccc', fontSize: 12, marginRight: 16 },
+  previewDots: { position: 'absolute', bottom: 82 + bottomInset, alignSelf: 'center', flexDirection: 'row', gap: 6, zIndex: 10 },
+  previewDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.35)' },
+  previewDotActive: { backgroundColor: '#fff', width: 18, borderRadius: 3 },
   sharingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
   sharingBox: { backgroundColor: t.surface, borderRadius: 20, padding: 32, alignItems: 'center', gap: 16, elevation: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.22, shadowRadius: 12 },
   sharingText: { color: t.text, fontSize: 15, fontWeight: '600' },
-  shareToast: { position: 'absolute', bottom: 32, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2E7D32', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 28, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 8 },
+  shareToast: { position: 'absolute', bottom: 32 + bottomInset, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2E7D32', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 28, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 8 },
   shareToastTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

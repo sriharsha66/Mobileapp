@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as LegacyFS from 'expo-file-system/legacy';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, AppTheme } from '../context/ThemeContext';
 import { useBiometric } from '../context/BiometricContext';
@@ -45,7 +46,8 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
   const [favIds, setFavIds] = useState<string[]>([]);
   const [starredCount, setStarredCount] = useState(0);
 
-  const s = useMemo(() => makeStyles(t), [t]);
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const s = useMemo(() => makeStyles(t, bottomInset), [t, bottomInset]);
 
   const loadFavs = useCallback(async () => {
     const [quotesJson, starredJson] = await Promise.all([
@@ -366,6 +368,35 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
 
       {/* App Lock toggle — temporarily hidden */}
 
+      {/* About */}
+      <Text style={s.sectionHeader}>About</Text>
+
+      <TouchableOpacity style={s.navRow} onPress={() => navigation.navigate('Legal', { type: 'terms' })} activeOpacity={0.85}>
+        <View style={s.navRowLeft}>
+          <View style={[s.navIcon, { backgroundColor: '#E3F2FD' }]}>
+            <Ionicons name="document-text-outline" size={20} color="#1565C0" />
+          </View>
+          <View>
+            <Text style={s.navTitle}>Terms & Conditions</Text>
+            <Text style={s.navSub}>Usage rules and user agreement</Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={t.textMuted} />
+      </TouchableOpacity>
+
+      <TouchableOpacity style={s.navRow} onPress={() => navigation.navigate('Legal', { type: 'privacy' })} activeOpacity={0.85}>
+        <View style={s.navRowLeft}>
+          <View style={[s.navIcon, { backgroundColor: '#E8F5E9' }]}>
+            <Ionicons name="shield-checkmark-outline" size={20} color="#2E7D32" />
+          </View>
+          <View>
+            <Text style={s.navTitle}>Privacy Policy</Text>
+            <Text style={s.navSub}>How your data is protected</Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={t.textMuted} />
+      </TouchableOpacity>
+
       {/* Logout */}
       <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
         <Ionicons name="log-out-outline" size={18} color="#EF5350" style={{ marginRight: 6 }} />
@@ -407,7 +438,7 @@ function FieldC({ label, value, onChangeText, keyboardType, t }: {
   );
 }
 
-const makeStyles = (t: AppTheme) => StyleSheet.create({
+const makeStyles = (t: AppTheme, bottomInset: number = 0) => StyleSheet.create({
   container: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, paddingBottom: 40 },
   avatarSection: { alignItems: 'center', paddingVertical: 28 },
@@ -450,6 +481,7 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
   navIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   navTitle: { fontSize: 15, fontWeight: '700', color: t.text },
   navSub: { fontSize: 12, color: t.textMuted, marginTop: 2 },
+  sectionHeader: { fontSize: 11, fontWeight: '700', color: t.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10, marginTop: 4, paddingLeft: 4 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#EF5350', borderRadius: 12, padding: 14, marginBottom: 16 },
   logoutText: { color: '#EF5350', fontWeight: '700', fontSize: 15 },
   version: { textAlign: 'center', color: t.textMuted, fontSize: 12 },
@@ -457,13 +489,13 @@ const makeStyles = (t: AppTheme) => StyleSheet.create({
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.96)', alignItems: 'center', justifyContent: 'center' },
   modalImage: { width: '100%', height: '75%' },
   modalClose: { position: 'absolute', top: 52, right: 20, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
-  modalActions: { position: 'absolute', bottom: 60, flexDirection: 'row', gap: 12 },
+  modalActions: { position: 'absolute', bottom: 60 + bottomInset, flexDirection: 'row', gap: 12 },
   modalChangeBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#1565C0', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 12, elevation: 4 },
   modalChangeTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
   modalRemoveBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(239,83,80,0.15)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: '#EF5350' },
   modalRemoveTxt: { color: '#EF5350', fontSize: 15, fontWeight: '700' },
   editModalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  editModalCard: { backgroundColor: t.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36 },
+  editModalCard: { backgroundColor: t.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 36 + bottomInset },
   editModalTitle: { fontSize: 17, fontWeight: '700', color: t.text, textAlign: 'center', marginBottom: 16 },
   editModalImg: { width: '100%', height: 240, borderRadius: 16, backgroundColor: t.inputBg, marginBottom: 16 },
   editModalBtns: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 },
