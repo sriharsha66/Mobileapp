@@ -1,7 +1,9 @@
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as NavigationBar from 'expo-navigation-bar';
 import * as Notifications from 'expo-notifications';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider } from './src/context/ThemeContext';
@@ -43,6 +45,12 @@ function handleNotificationReportId(reportId: string) {
 
 export default function App() {
   useEffect(() => {
+    // Set Android navigation bar: white background, black icons
+    if (Platform.OS === 'android') {
+      NavigationBar.setBackgroundColorAsync('#ffffff');
+      NavigationBar.setButtonStyleAsync('dark');
+    }
+
     // Killed-app case: notification that launched the app
     Notifications.getLastNotificationResponseAsync().then(response => {
       const reportId = response?.notification.request.content.data?.reportId as string | undefined;
