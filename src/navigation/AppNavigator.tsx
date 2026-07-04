@@ -97,10 +97,10 @@ function MainTabs() {
             <TouchableOpacity
               onPress={props.onPress}
               activeOpacity={0.85}
-              style={[props.style, tabStyles.addTabItem, { paddingTop: 4, paddingBottom: insets.bottom + 4 }]}
+              style={[props.style, tabStyles.addTabItem]}
             >
-              <Ionicons name="add-circle-outline" size={24} color="#9E9E9E" />
-              <Text style={tabStyles.addLabel}>Add</Text>
+              <Ionicons name="add-circle-outline" size={24} color={theme.textMuted} />
+              <Text style={[tabStyles.addLabel, { color: theme.textMuted }]}>Add</Text>
             </TouchableOpacity>
           ),
         }}
